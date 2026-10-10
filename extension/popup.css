@@ -154,3 +154,19 @@ button[aria-pressed="true"] {
 @media (min-width: 350px) {
   .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.stat-wide {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  min-height: 70px;
+}
+.stat-wide .stat-label {
+  margin-top: 0;
+  white-space: nowrap;
+}
+.stat-text {
+  display: flex;
+  flex-direction: column;
+}

@@ -67,7 +67,7 @@
     const blocked = blockingOff ? 0 : (report.blockedTrackerCount || 0);
     const allowed = blockingOff ? trackerRequests : (report.allowedTrackerCount || 0);
     text($('statTrackers'), String(trackerRequests));
-    text($('statTrackersSub'), `from ${report.trackerCount || 0} ${plural(report.trackerCount || 0, 'company', 'companies')}`);
+    text($('statTrackersSub'), (report.trackerCount || 0) ? `from ${report.trackerCount} ${plural(report.trackerCount, 'company', 'companies')}` : 'No companies');
     text($('statBlocked'), String(blocked));
     text($('statBlockedSub'), blockingOff ? 'Blocking is off' : 'tracker requests');
     setNumberClass($('statBlocked'), blocked > 0 ? 'good' : '');
@@ -82,7 +82,7 @@
     const fpCount = (report.fingerprints || []).length;
     text($('statFingerprint'), fpCount ? `${fpCount} ${plural(fpCount, 'method')}` : 'None found');
     setNumberClass($('statFingerprint'), fpCount ? 'warn' : 'good');
-    text($('statFingerprintSub'), 'methods');
+    text($('statFingerprintSub'), 'on this page');
     const cookieCount = (report.cookieDomains || []).length;
     text($('statCookies'), String(cookieCount));
     setNumberClass($('statCookies'), cookieCount ? 'warn' : '');

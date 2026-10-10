@@ -54,17 +54,20 @@
         <button class="stat-tile" type="button" data-target="fingerprintCard">
           <span id="statFingerprint" class="stat-number good text-stat">None found</span>
           <span class="stat-label">Fingerprinting</span>
-          <span id="statFingerprintSub" class="stat-sub">methods</span>
+          <span id="statFingerprintSub" class="stat-sub">on this page</span>
         </button>
-        <button class="stat-tile" type="button" data-target="cookiesCard">
+        <button class="stat-tile stat-wide" type="button" data-target="cookiesCard">
           <span id="statCookies" class="stat-number">0</span>
-          <span class="stat-label">Third-party cookies</span>
-          <span id="statCookiesSub" class="stat-sub">websites</span>
+          <span class="stat-text">
+            <span class="stat-label">Third-party cookies</span>
+            <span id="statCookiesSub" class="stat-sub">websites</span>
+          </span>
         </button>
       </div>
       <details id="summaryMore">
         <summary>Show more</summary>
         <p class="muted">PrivacyBrew counts requests to ad companies. It does not count the ads that you see.</p>
+        <p class="muted">With blocking on, blocked scripts cannot load more trackers. So the counts can be lower.</p>
       </details>
     </section>
 
