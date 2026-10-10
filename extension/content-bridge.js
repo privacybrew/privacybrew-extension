@@ -40,7 +40,7 @@
 
   function scanResources() {
     try {
-      const nodes = document.querySelectorAll('script[src], link[href]');
+      const nodes = document.querySelectorAll('script[src]');
       for (const node of nodes) {
         const url = resourceUrl(node);
         if (!url || !/^https?:\/\//.test(url)) continue;

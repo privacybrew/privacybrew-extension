@@ -23,6 +23,50 @@
       <p id="messageText">Open a website and reload it to check it.</p>
     </section>
 
+    <section class="card" id="summaryCard">
+      <h2>Summary</h2>
+      <div class="stat-grid">
+        <button class="stat-tile" type="button" data-target="trackersCard">
+          <span id="statTrackers" class="stat-number">0</span>
+          <span class="stat-label">Trackers found</span>
+          <span id="statTrackersSub" class="stat-sub">from 0 companies</span>
+        </button>
+        <button class="stat-tile" type="button" data-target="trackersCard">
+          <span id="statBlocked" class="stat-number good">0</span>
+          <span class="stat-label">Blocked</span>
+          <span id="statBlockedSub" class="stat-sub">tracker requests</span>
+        </button>
+        <button class="stat-tile" type="button" data-target="trackersCard">
+          <span id="statAllowed" class="stat-number">0</span>
+          <span class="stat-label">Allowed</span>
+          <span id="statAllowedSub" class="stat-sub">tracker requests</span>
+        </button>
+        <button class="stat-tile" type="button" data-target="trackersCard">
+          <span id="statAds" class="stat-number">0</span>
+          <span class="stat-label">Ad trackers</span>
+          <span id="statAdsSub" class="stat-sub">0 blocked · 0 allowed</span>
+        </button>
+        <button class="stat-tile" type="button" data-target="trackersCard">
+          <span id="statScripts" class="stat-number">0</span>
+          <span class="stat-label">Outside scripts</span>
+          <span id="statScriptsSub" class="stat-sub">0 blocked</span>
+        </button>
+        <button class="stat-tile" type="button" data-target="fingerprintCard">
+          <span id="statFingerprint" class="stat-number good text-stat">None found</span>
+          <span class="stat-label">Fingerprinting</span>
+          <span id="statFingerprintSub" class="stat-sub">methods</span>
+        </button>
+        <button class="stat-tile" type="button" data-target="cookiesCard">
+          <span id="statCookies" class="stat-number">0</span>
+          <span class="stat-label">Third-party cookies</span>
+          <span id="statCookiesSub" class="stat-sub">websites</span>
+        </button>
+      </div>
+      <details id="summaryMore">
+        <summary>Show more</summary>
+        <p class="muted">PrivacyBrew counts requests to ad companies. It does not count the ads that you see.</p>
+      </details>
+    </section>
 
     <section class="card" id="controlsCard">
       <h2>Blocking settings</h2>
@@ -59,14 +103,14 @@
       </details>
     </section>
 
-    <section class="card">
+    <section class="card" id="cookiesCard">
       <h2>Third-party cookies</h2>
       <p id="cookieSummary">No third-party websites tried to set a cookie.</p>
       <p class="muted">A cookie can help a company remember this browser.</p>
       <ul id="cookieList"></ul>
     </section>
 
-    <section class="card">
+    <section class="card" id="fingerprintCard">
       <h2>Fingerprinting</h2>
       <p id="fingerprintSummary">No fingerprinting signals found.</p>
       <p class="muted">Fingerprinting can identify your browser without a cookie.</p>

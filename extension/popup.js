@@ -34,6 +34,7 @@
     text($('messageText'), body);
     $('trackersCard').hidden = true;
     $('controlsCard').hidden = true;
+    $('summaryCard').hidden = true;
   }
 
   function setToggle(button, on) {
@@ -43,6 +44,49 @@
 
   function showReloadHint() {
     $('reloadHint').hidden = false;
+  }
+
+
+  function setNumberClass(el, mode) {
+    el.classList.remove('good', 'warn');
+    if (mode) el.classList.add(mode);
+  }
+
+  function scrollToCard(id) {
+    const el = $(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const details = el.querySelector('details');
+    if (details) details.open = true;
+    el.focus({ preventScroll: true });
+  }
+
+  function renderSummary(report) {
+    const blockingOff = report.sitePaused || (report.settings && !report.settings.blockingEnabled);
+    const trackerRequests = report.trackerRequestCount || 0;
+    const blocked = blockingOff ? 0 : (report.blockedTrackerCount || 0);
+    const allowed = blockingOff ? trackerRequests : (report.allowedTrackerCount || 0);
+    text($('statTrackers'), String(trackerRequests));
+    text($('statTrackersSub'), `from ${report.trackerCount || 0} ${plural(report.trackerCount || 0, 'company', 'companies')}`);
+    text($('statBlocked'), String(blocked));
+    text($('statBlockedSub'), blockingOff ? 'Blocking is off' : 'tracker requests');
+    setNumberClass($('statBlocked'), blocked > 0 ? 'good' : '');
+    text($('statAllowed'), String(allowed));
+    text($('statAllowedSub'), 'tracker requests');
+    setNumberClass($('statAllowed'), allowed > 0 && !blockingOff ? 'warn' : '');
+    text($('statAds'), String(report.adTrackerCount || 0));
+    text($('statAdsSub'), `${blockingOff ? 0 : (report.adBlockedCount || 0)} blocked · ${blockingOff ? (report.adTrackerCount || 0) : (report.adAllowedCount || 0)} allowed`);
+    setNumberClass($('statAds'), (report.adAllowedCount || 0) > 0 && !blockingOff ? 'warn' : '');
+    text($('statScripts'), String(report.outsideScriptCount || 0));
+    text($('statScriptsSub'), `${blockingOff ? 0 : (report.outsideScriptBlockedCount || 0)} blocked`);
+    const fpCount = (report.fingerprints || []).length;
+    text($('statFingerprint'), fpCount ? `${fpCount} ${plural(fpCount, 'method')}` : 'None found');
+    setNumberClass($('statFingerprint'), fpCount ? 'warn' : 'good');
+    text($('statFingerprintSub'), 'methods');
+    const cookieCount = (report.cookieDomains || []).length;
+    text($('statCookies'), String(cookieCount));
+    setNumberClass($('statCookies'), cookieCount ? 'warn' : '');
+    text($('statCookiesSub'), plural(cookieCount, 'website'));
   }
 
   function renderControls(report) {
@@ -105,6 +149,7 @@
     } else if (report.status === 'needReload') {
       showMessage('Reload the page to check it.', 'PrivacyBrew did not see this page load.');
     }
+    renderSummary(report);
     renderControls(report);
     renderTrackers(report);
     const unknownCount = (report.unknownDomains || []).length;
@@ -151,6 +196,9 @@
       showReloadHint();
       await refresh();
     });
+    for (const tile of document.querySelectorAll('.stat-tile[data-target]')) {
+      tile.addEventListener('click', () => scrollToCard(tile.dataset.target));
+    }
     $('reloadButton').addEventListener('click', async () => {
       await chrome.runtime.sendMessage({ type: 'reloadTab', tabId: currentTabId });
       window.close();

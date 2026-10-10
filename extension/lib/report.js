@@ -29,15 +29,16 @@
       unknownDomains: {},
       cookieDomains: {},
       fingerprints: {},
+      outsideScripts: { urls: {}, blockedUrls: {} },
       updatedAt: Date.now()
     };
   }
 
-  function addTracker(state, match, requestDomain, status) {
+  function addTracker(state, match, requestDomain, status, requestUrl) {
     if (!match || !match.companyId) return state;
     const key = match.companyId;
     if (!state.trackers[key]) {
-      state.trackers[key] = { company: match.company, category: match.category || 'Other', categories: {}, domains: {}, blockedDomains: {}, allowedDomains: {} };
+      state.trackers[key] = { company: match.company, category: match.category || 'Other', categories: {}, domains: {}, blockedDomains: {}, allowedDomains: {}, requestUrls: {}, requestCategories: {}, blockedRequestUrls: {}, allowedRequestUrls: {} };
     }
     const category = match.category || 'Other';
     state.trackers[key].categories = state.trackers[key].categories || {};
@@ -48,8 +49,34 @@
     state.trackers[key].domains[requestDomain] = true;
     state.trackers[key].blockedDomains = state.trackers[key].blockedDomains || {};
     state.trackers[key].allowedDomains = state.trackers[key].allowedDomains || {};
-    if (status === 'blocked') state.trackers[key].blockedDomains[requestDomain] = true;
-    else state.trackers[key].allowedDomains[requestDomain] = true;
+    state.trackers[key].requestUrls = state.trackers[key].requestUrls || {};
+    state.trackers[key].requestCategories = state.trackers[key].requestCategories || {};
+    state.trackers[key].blockedRequestUrls = state.trackers[key].blockedRequestUrls || {};
+    state.trackers[key].allowedRequestUrls = state.trackers[key].allowedRequestUrls || {};
+    const requestKey = requestUrl || requestDomain;
+    state.trackers[key].requestUrls[requestKey] = true;
+    state.trackers[key].requestCategories[requestKey] = category;
+    if (status === 'blocked') {
+      state.trackers[key].blockedDomains[requestDomain] = true;
+      state.trackers[key].blockedRequestUrls[requestKey] = true;
+      delete state.trackers[key].allowedRequestUrls[requestKey];
+    } else if (!state.trackers[key].blockedRequestUrls[requestKey]) {
+      state.trackers[key].allowedDomains[requestDomain] = true;
+      state.trackers[key].allowedRequestUrls[requestKey] = true;
+    }
+    state.updatedAt = Date.now();
+    return state;
+  }
+
+
+  function addOutsideScript(state, url, status) {
+    if (!url) return state;
+    state.outsideScripts = state.outsideScripts || { urls: {}, blockedUrls: {} };
+    state.outsideScripts.urls = state.outsideScripts.urls || {};
+    state.outsideScripts.blockedUrls = state.outsideScripts.blockedUrls || {};
+    state.outsideScripts.urls[url] = true;
+    if (status === 'blocked') state.outsideScripts.blockedUrls[url] = true;
+    else delete state.outsideScripts.blockedUrls[url];
     state.updatedAt = Date.now();
     return state;
   }
@@ -107,11 +134,23 @@
         domains: Object.keys(value.domains || {}).sort(),
         blockedDomains: Object.keys(value.blockedDomains || {}).sort(),
         allowedDomains: Object.keys(value.allowedDomains || {}).sort(),
-        status: Object.keys(value.blockedDomains || {}).length ? 'Blocked' : 'Allowed'
+        requestUrls: Object.keys(value.requestUrls || value.domains || {}).sort(),
+        requestCategories: Object.assign({}, value.requestCategories || {}),
+        blockedRequestUrls: Object.keys(value.blockedRequestUrls || {}).sort(),
+        allowedRequestUrls: Object.keys(value.allowedRequestUrls || {}).sort(),
+        status: Object.keys(value.blockedRequestUrls || {}).length ? 'Blocked' : 'Allowed'
       };
     }).sort((a, b) => (CATEGORY_RANK[a.category] ?? 99) - (CATEGORY_RANK[b.category] ?? 99) || a.company.localeCompare(b.company));
-    const blockedTrackerCount = trackers.reduce((sum, tracker) => sum + tracker.blockedDomains.length, 0);
-    const blockedCompanyCount = trackers.filter((tracker) => tracker.blockedDomains.length > 0).length;
+    const trackerRequestCount = trackers.reduce((sum, tracker) => sum + tracker.requestUrls.length, 0);
+    const blockedTrackerCount = trackers.reduce((sum, tracker) => sum + tracker.blockedRequestUrls.length, 0);
+    const allowedTrackerCount = Math.max(0, trackerRequestCount - blockedTrackerCount);
+    const blockedCompanyCount = trackers.filter((tracker) => tracker.blockedRequestUrls.length > 0).length;
+    const adTrackerCount = trackers.reduce((sum, tracker) => sum + tracker.requestUrls.filter((url) => tracker.requestCategories[url] === 'Advertising').length, 0);
+    const adBlockedCount = trackers.reduce((sum, tracker) => sum + tracker.blockedRequestUrls.filter((url) => tracker.requestCategories[url] === 'Advertising').length, 0);
+    const adAllowedCount = Math.max(0, adTrackerCount - adBlockedCount);
+    const outsideScripts = state.outsideScripts || {};
+    const outsideScriptUrls = Object.keys(outsideScripts.urls || {}).sort();
+    const outsideScriptBlockedUrls = Object.keys(outsideScripts.blockedUrls || {}).sort();
     const fingerprints = Object.entries(state.fingerprints || {}).map(([technique, origins]) => ({
       technique,
       label: FINGERPRINT_LABELS[technique] || technique,
@@ -123,8 +162,15 @@
       siteDomain: state.siteDomain || '',
       label: overallLabel(trackers.length, fingerprints.length > 0),
       trackerCount: trackers.length,
+      trackerRequestCount,
       blockedTrackerCount,
+      allowedTrackerCount,
       blockedCompanyCount,
+      adTrackerCount,
+      adBlockedCount,
+      adAllowedCount,
+      outsideScriptCount: outsideScriptUrls.length,
+      outsideScriptBlockedCount: outsideScriptBlockedUrls.length,
       trackers,
       unknownDomains: Object.keys(state.unknownDomains || {}).sort(),
       cookieDomains: Object.keys(state.cookieDomains || {}).sort(),
@@ -135,5 +181,5 @@
   }
 
   global.PB = global.PB || {};
-  global.PB.Report = { CATEGORY_LINES, CATEGORY_PRIORITY, FINGERPRINT_LABELS, emptyState, addTracker, addUnknown, addCookie, addFingerprint, overallLabel, orderedCategories, plural, summarize };
+  global.PB.Report = { CATEGORY_LINES, CATEGORY_PRIORITY, FINGERPRINT_LABELS, emptyState, addTracker, addOutsideScript, addUnknown, addCookie, addFingerprint, overallLabel, orderedCategories, plural, summarize };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

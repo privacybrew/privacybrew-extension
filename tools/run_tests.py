@@ -295,6 +295,7 @@ def run_e2e(cdp):
     navigate_and_wait(cdp, session, f'http://site.test:{PORT}/tracker.html')
     blocked_vars = eval_value(cdp, session, '({ga: window.__pbGaRan, ad: window.__pbDoubleClickRan, meta: window.__pbMetaRan, bing: window.__pbBingRan, content: window.__pbContentRan, unknown: window.__pbUnknownRan, gpc: navigator.globalPrivacyControl})')
     tab_id, state = storage_report(cdp, sw_session)
+    report = summarize_state(cdp, sw_session, tab_id)
     tracker_companies = sorted(v['company'] for v in state.get('trackers', {}).values())
     by_company = {v['company']: v for v in state.get('trackers', {}).values()}
     fps = sorted(state.get('fingerprints', {}).keys())
@@ -313,6 +314,12 @@ def run_e2e(cdp):
     checks.append(('Meta not only fingerprinting', set(by_company.get('Meta', {}).get('categories', {}).keys()) != {'Fingerprinting'}))
     checks.append(('Microsoft advertising chip', 'Advertising' in by_company.get('Microsoft', {}).get('categories', {})))
     checks.append(('unknown domain', 'some-unknown-thirdparty.example' in state.get('unknownDomains', {})))
+    checks.append(('summary tracker requests', report.get('trackerRequestCount') == 5))
+    checks.append(('summary blocked requests', report.get('blockedTrackerCount') == 4))
+    checks.append(('summary allowed requests', report.get('allowedTrackerCount') == 1))
+    checks.append(('summary invariant', report.get('trackerRequestCount') == report.get('blockedTrackerCount') + report.get('allowedTrackerCount')))
+    checks.append(('summary ad split', report.get('adTrackerCount') == 2 and report.get('adBlockedCount') == 2 and report.get('adAllowedCount') == 0))
+    checks.append(('summary outside scripts', report.get('outsideScriptCount') == 6 and report.get('outsideScriptBlockedCount') == 4))
     for technique in ['canvas', 'webgl', 'audio', 'fonts']:
         checks.append((f'{technique} fingerprint', technique in fps))
     checks.append(('fingerprint source is page script', f'http://site.test:{PORT}/fp.js' in fp_origins))
@@ -333,6 +340,13 @@ def run_e2e(cdp):
     cdp.call('Emulation.setDeviceMetricsOverride', {'width': 360, 'height': 760, 'deviceScaleFactor': 1, 'mobile': False}, popup_session)
     cdp.call('Page.navigate', {'url': f'chrome-extension://{ext_id}/popup.html?tabId={tab_id}'}, popup_session)
     wait_expr(cdp, popup_session, 'document.readyState === "complete"', 10)
+    wait_expr(cdp, popup_session, "document.querySelector('#statTrackers').textContent !== '0'", 10)
+    checks.append(('popup tracker tile', popup_text(cdp, popup_session, '#statTrackers') == '5'))
+    checks.append(('popup blocked tile', popup_text(cdp, popup_session, '#statBlocked') == '4'))
+    checks.append(('popup allowed tile', popup_text(cdp, popup_session, '#statAllowed') == '1'))
+    checks.append(('popup ad tile', popup_text(cdp, popup_session, '#statAdsSub') == '2 blocked · 0 allowed'))
+    checks.append(('popup outside script tile', popup_text(cdp, popup_session, '#statScriptsSub') == '4 blocked'))
+    checks.append(('popup fingerprint tile', popup_text(cdp, popup_session, '#statFingerprint') == '4 methods'))
     time.sleep(0.5)
     shot = cdp.call('Page.captureScreenshot', {'format': 'png', 'captureBeyondViewport': True}, popup_session)['data']
     shot_path = ART / 'pb-ext-popup.png'
@@ -344,6 +358,7 @@ def run_e2e(cdp):
     _, paused_state = storage_report(cdp, sw_session)
     paused_report = summarize_state(cdp, sw_session, tab_id)
     checks.append(('paused blocked count is zero', paused_report.get('blockedTrackerCount') == 0))
+    checks.append(('paused allowed equals found', paused_report.get('allowedTrackerCount') == paused_report.get('trackerRequestCount')))
     checks.append(('paused rows are allowed', all(t.get('status') == 'Allowed' for t in paused_report.get('trackers', []))))
     paused_popup = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
     paused_popup_session = attach_target(cdp, paused_popup)
@@ -355,6 +370,8 @@ def run_e2e(cdp):
     time.sleep(0.2)
     checks.append(('paused header text', popup_text(cdp, paused_popup_session, '#overall') == 'Blocking is off for this website'))
     checks.append(('paused summary text', popup_text(cdp, paused_popup_session, '#trackerSummary') == 'PrivacyBrew did not block trackers on this website.'))
+    checks.append(('paused blocked tile', popup_text(cdp, paused_popup_session, '#statBlocked') == '0'))
+    checks.append(('paused allowed tile equals found', popup_text(cdp, paused_popup_session, '#statAllowed') == popup_text(cdp, paused_popup_session, '#statTrackers')))
     paused_shot = cdp.call('Page.captureScreenshot', {'format': 'png', 'captureBeyondViewport': True}, paused_popup_session)['data']
     paused_shot_path = ART / 'pb-ext-popup-paused.png'
     paused_shot_path.write_bytes(base64.b64decode(paused_shot))
@@ -365,6 +382,7 @@ def run_e2e(cdp):
     checks.append(('global switch off allows trackers', all(global_off_vars.values())))
     global_off_report = summarize_state(cdp, sw_session, tab_id)
     checks.append(('global off blocked count is zero', global_off_report.get('blockedTrackerCount') == 0))
+    checks.append(('global off allowed equals found', global_off_report.get('allowedTrackerCount') == global_off_report.get('trackerRequestCount')))
     checks.append(('global off rows are allowed', all(t.get('status') == 'Allowed' for t in global_off_report.get('trackers', []))))
     global_popup = cdp.call('Target.createTarget', {'url': f'chrome-extension://{ext_id}/popup.html?tabId={tab_id}'})['targetId']
     global_popup_session = attach_target(cdp, global_popup)
@@ -383,13 +401,29 @@ def run_e2e(cdp):
     cdp.call('Runtime.evaluate', {'expression': "setGlobalBlocking(true)", 'awaitPromise': True}, sw_session)
     cdp.call('Runtime.evaluate', {'expression': "setGpc(true)", 'awaitPromise': True}, sw_session)
     navigate_and_wait(cdp, session, f'http://clean.test:{PORT}/clean.html')
-    _, clean_state = storage_report(cdp, sw_session)
+    clean_tab_id, clean_state = storage_report(cdp, sw_session)
+    clean_report = summarize_state(cdp, sw_session, clean_tab_id)
     checks.append(('reset on clean navigation', len(clean_state.get('trackers', {})) == 0 and len(clean_state.get('unknownDomains', {})) == 0))
+    checks.append(('clean summary zeros', all(clean_report.get(k, 0) == 0 for k in ['trackerRequestCount', 'blockedTrackerCount', 'allowedTrackerCount', 'adTrackerCount', 'outsideScriptCount'])))
+    clean_popup = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
+    clean_popup_session = attach_target(cdp, clean_popup)
+    cdp.call('Page.enable', sessionId=clean_popup_session)
+    cdp.call('Emulation.setDeviceMetricsOverride', {'width': 360, 'height': 760, 'deviceScaleFactor': 1, 'mobile': False}, clean_popup_session)
+    cdp.call('Page.navigate', {'url': f'chrome-extension://{ext_id}/popup.html?tabId={clean_tab_id}'}, clean_popup_session)
+    wait_expr(cdp, clean_popup_session, 'document.readyState === \"complete\"', 10)
+    wait_expr(cdp, clean_popup_session, "document.querySelector('#overall').textContent !== 'Loading report'", 10)
+    checks.append(('clean tracker tile zero', popup_text(cdp, clean_popup_session, '#statTrackers') == '0'))
+    checks.append(('clean blocked tile zero', popup_text(cdp, clean_popup_session, '#statBlocked') == '0'))
+    checks.append(('clean allowed tile zero', popup_text(cdp, clean_popup_session, '#statAllowed') == '0'))
+    checks.append(('clean fingerprint tile none', popup_text(cdp, clean_popup_session, '#statFingerprint') == 'None found'))
+    clean_shot = cdp.call('Page.captureScreenshot', {'format': 'png', 'captureBeyondViewport': True}, clean_popup_session)['data']
+    clean_shot_path = ART / 'pb-ext-popup-clean.png'
+    clean_shot_path.write_bytes(base64.b64decode(clean_shot))
     worker_requests = [e for e in cdp.events if e.get('sessionId') in worker_sessions and e.get('method') == 'Network.requestWillBeSent' and e.get('params', {}).get('request', {}).get('url', '').startswith(('http://', 'https://'))]
     checks.append(('extension made zero network requests', len(worker_requests) == 0))
     checks.append(('service worker has no errors', service_worker_errors(cdp, worker_sessions) == []))
     fail = [name for name, ok in checks if not ok]
-    return {'pass': len(checks) - len(fail), 'fail': len(fail), 'checks': checks, 'method': 'load-extension fallback', 'screenshot': str(shot_path), 'pausedScreenshot': str(paused_shot_path)}
+    return {'pass': len(checks) - len(fail), 'fail': len(fail), 'checks': checks, 'method': 'load-extension fallback', 'screenshot': str(shot_path), 'pausedScreenshot': str(paused_shot_path), 'cleanScreenshot': str(clean_shot_path)}
 
 def main():
     ART.mkdir(exist_ok=True)

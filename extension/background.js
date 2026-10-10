@@ -255,12 +255,25 @@ async function observeTrackerUrl(tabId, url, status) {
     const settings = await getSettings();
     const paused = Boolean(settings.pausedSites[state.siteDomain]);
     const blocked = status === 'blocked' && settings.blockingEnabled && !paused;
-    PB.Report.addTracker(state, match, requestHost, blocked ? 'blocked' : 'allowed');
+    PB.Report.addTracker(state, match, requestHost, blocked ? 'blocked' : 'allowed', url);
   } else if (!match) {
     PB.Report.addUnknown(state, requestDomain);
   }
   scheduleSave(tabId, state);
   await updateBadge(tabId, state);
+}
+
+
+async function observeResourceUrl(tabId, url, status) {
+  if (tabId < 0 || !url || !isSupportedUrl(url)) return;
+  const state = await ensureTabState(tabId, null);
+  if (!state || state.status !== 'ok' || !state.siteDomain) return;
+  const requestDomain = psl.registrableDomain(new URL(url).hostname);
+  if (requestDomain && requestDomain !== state.siteDomain) {
+    PB.Report.addOutsideScript(state, url, status);
+    scheduleSave(tabId, state);
+  }
+  await observeTrackerUrl(tabId, url, status);
 }
 
 async function observeRequest(details) {
@@ -297,12 +310,18 @@ function applySettingsToSummary(summary, settings) {
   const offForSite = Boolean(summary.siteDomain && settings.pausedSites[summary.siteDomain]);
   if (!settings.blockingEnabled || offForSite) {
     summary.blockedTrackerCount = 0;
+    summary.allowedTrackerCount = summary.trackerRequestCount || 0;
     summary.blockedCompanyCount = 0;
+    summary.adBlockedCount = 0;
+    summary.adAllowedCount = summary.adTrackerCount || 0;
+    summary.outsideScriptBlockedCount = 0;
     summary.sitePaused = offForSite;
     summary.trackers = (summary.trackers || []).map((tracker) => Object.assign({}, tracker, {
       status: 'Allowed',
       allowedDomains: Array.from(new Set([...(tracker.allowedDomains || []), ...(tracker.blockedDomains || [])])).sort(),
-      blockedDomains: []
+      allowedRequestUrls: Array.from(new Set([...(tracker.allowedRequestUrls || []), ...(tracker.blockedRequestUrls || [])])).sort(),
+      blockedDomains: [],
+      blockedRequestUrls: []
     }));
   }
   return summary;
@@ -352,7 +371,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     await ensureData();
     if (message && message.type === 'resource' && sender.tab && sender.tab.id >= 0) {
-      await observeTrackerUrl(sender.tab.id, message.url || '', message.status || 'seen');
+      await observeResourceUrl(sender.tab.id, message.url || '', message.status || 'allowed');
       sendResponse({ ok: true });
       return;
     }
