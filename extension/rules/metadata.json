@@ -17,24 +17,26 @@
     "Other"
   ],
   "counts": {
-    "Advertising": 2740,
-    "Analytics": 524,
-    "Social": 50,
-    "Fingerprinting": 239,
-    "Cryptomining": 33
+    "Advertising": 1273,
+    "Analytics": 358,
+    "Social": 14,
+    "Fingerprinting": 169,
+    "Cryptomining": 14
   },
-  "totalBlockRules": 3586,
+  "totalBlockRules": 1828,
   "sameCompanyAllowRules": 1719,
-  "totalStaticRules": 5306,
-  "totalStaticRulesWithEasyList": 22000,
+  "totalStaticRules": 3548,
+  "totalStaticRulesWithEasyList": 7310,
   "staticRuleCap": 22000,
   "uniqueRuleIds": 5306,
   "limitNote": "Chrome allows at least 30000 static DNR rules for one extension. This prototype stays below that limit.",
   "sameCompanyChoice": "Block rules use excludedInitiatorDomains, and allow_same_company rules use initiatorDomains. Both are generated from Disconnect properties for that company.",
   "easyList": {
-    "networkCandidates": 53193,
-    "networkRules": 16694,
-    "cutForBudget": 36499,
+    "networkCandidates": 53195,
+    "networkRules": 3762,
+    "mergedDomainRules": 68,
+    "coveredCandidates": 53195,
+    "cutForBudget": 0,
     "skipped": {
       "$popup": 2969,
       "regex": 15,

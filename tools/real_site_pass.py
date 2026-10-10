@@ -201,6 +201,7 @@ def load_page(cdp, site, mode, sw_session=None, ext_id=None, worker_sessions=Non
             console_errors += 1
     metrics = cdp.call('Performance.getMetrics', sessionId=session).get('metrics', [])
     metric_map = {m['name']: m.get('value') for m in metrics}
+    navtiming = eval_value(cdp, session, "(() => { const n = performance.getEntriesByType('navigation')[0]; return n ? {domContentLoadedMs: Math.round(n.domContentLoadedEventEnd), loadEventMs: Math.round(n.loadEventEnd)} : {}; })()") or {}
     visible = eval_value(cdp, session, "(() => { const vis = e => { const r=e.getBoundingClientRect(); const s=getComputedStyle(e); return r.width>1 && r.height>1 && s.visibility!=='hidden' && s.display!=='none'; }; const text=(document.body&&document.body.innerText||''); return {title:document.title||'', textSample:text.slice(0,2000), textLength:text.length, images:[...document.images].filter(vis).length, videos:[...document.querySelectorAll('video')].filter(vis).length, iframes:[...document.querySelectorAll('iframe')].filter(vis).length, finalUrl:location.href}; })()") or {}
     shot_path = OUT / f'{slug(site)}-{mode}.png'
     with contextlib.suppress(Exception):
@@ -221,7 +222,7 @@ def load_page(cdp, site, mode, sw_session=None, ext_id=None, worker_sessions=Non
     return {
       'site': site, 'mode': mode, 'ok': error is None, 'error': error,
       'loadTimeMs': round(load_time*1000) if load_time else None,
-      'idleTimeMs': round(idle_time*1000), 'requestCount': len(requests), 'bytes': bytes_sum,
+      'idleTimeMs': round(idle_time*1000), 'domContentLoadedMs': navtiming.get('domContentLoadedMs'), 'loadEventMs': navtiming.get('loadEventMs'), 'requestCount': len(requests), 'bytes': bytes_sum,
       'failed': failed, 'consoleErrors': console_errors, 'exceptions': exceptions,
       'title': visible.get('title',''), 'textSample': visible.get('textSample',''), 'textLength': visible.get('textLength',0), 'images': visible.get('images',0), 'videos': visible.get('videos',0), 'iframes': visible.get('iframes',0), 'finalUrl': visible.get('finalUrl',''),
       'JSHeapUsedSize': metric_map.get('JSHeapUsedSize'), 'TaskDuration': metric_map.get('TaskDuration'),

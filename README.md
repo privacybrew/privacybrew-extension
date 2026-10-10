@@ -45,7 +45,7 @@ The Public Suffix List data file is MPL-2.0. It is a separate generated file und
 
 PrivacyBrew uses Manifest V3 `declarativeNetRequest` static rules. Tracker blocking and ad blocking are on by default.
 
-Blocked tracker categories are Advertising, Analytics, Social, Fingerprinting, and Cryptomining. Content is not blocked because pages often need embedded video, maps, and other page parts. Ads are blocked with EasyList network rules and cosmetic hiding rules.
+Blocked tracker categories are Advertising, Analytics, Social, Fingerprinting, and Cryptomining. Content is not blocked because pages often need embedded video, maps, and other page parts. Ads are blocked with EasyList network rules and cosmetic hiding rules. The build merges compatible domain rules and keeps the total static rules under a 22000-rule cap.
 
 PrivacyBrew uses same-company allow rules from Disconnect properties. This lets a company website load its own company resources.
 

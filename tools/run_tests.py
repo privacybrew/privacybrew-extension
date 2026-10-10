@@ -307,6 +307,15 @@ def run_converter_unit():
     test('converter under budget', meta['networkRules'] <= mod.EASYLIST_BUDGET)
     test('converter cosmetic generic', '.ad-banner' in cosmetic['generic'])
     test('converter cosmetic site specific', '#sponsor' in cosmetic['sites'].get('site.test', []))
+
+    merged = mod.merge_domain_rules_from_items([
+        {'priority': 1, 'action': 'block', 'condition': {'requestDomains': ['a.example'], 'domainType': 'thirdParty', 'resourceTypes': ['script']}},
+        {'priority': 1, 'action': 'block', 'condition': {'requestDomains': ['b.example'], 'domainType': 'thirdParty', 'resourceTypes': ['script']}},
+        {'priority': 1, 'action': 'block', 'condition': {'requestDomains': ['c.example'], 'domainType': 'firstParty', 'resourceTypes': ['script']}},
+    ], 1)
+    merged_domains = [set(rule['condition'].get('requestDomains', [])) for rule in merged]
+    test('converter merges identical domain rules', any({'a.example', 'b.example'} == domains for domains in merged_domains))
+    test('converter preserves different options when merging', any({'c.example'} == domains and rule['condition'].get('domainType') == 'firstParty' for rule, domains in zip(merged, merged_domains)))
     return {'pass': sum(1 for r in results if r['ok']), 'fail': sum(1 for r in results if not r['ok']), 'results': results}
 
 def run_unit(cdp):

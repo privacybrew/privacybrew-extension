@@ -207,6 +207,36 @@ def easylist_url_filter(pattern):
         return {'urlFilter': pattern.replace('^', '*')}, None
     return {'urlFilter': pattern.replace('^', '*')}, None
 
+def condition_group_key(condition):
+    return json.dumps({k: v for k, v in condition.items() if k != 'requestDomains'}, sort_keys=True, separators=(',', ':'))
+
+def merge_domain_rules_from_items(items, start_id=1, chunk_size=1000):
+    domain_groups = {}
+    passthrough = []
+    for item in items:
+        condition = item['condition']
+        if 'requestDomains' in condition and len(condition.get('requestDomains', [])) == 1 and 'urlFilter' not in condition:
+            key = (item['priority'], item['action'], condition_group_key(condition))
+            if key not in domain_groups:
+                domain_groups[key] = {'priority': item['priority'], 'action': item['action'], 'condition': {k: v for k, v in condition.items() if k != 'requestDomains'}, 'domains': []}
+            domain_groups[key]['domains'].extend(condition['requestDomains'])
+        else:
+            passthrough.append(item)
+    rules = []
+    next_id = start_id
+    for group in domain_groups.values():
+        domains = sorted(set(group['domains']))
+        for i in range(0, len(domains), chunk_size):
+            condition = dict(group['condition'])
+            condition['requestDomains'] = domains[i:i + chunk_size]
+            rules.append({'id': next_id, 'priority': group['priority'], 'action': {'type': group['action']}, 'condition': condition})
+            next_id += 1
+    for item in passthrough:
+        rules.append({'id': next_id, 'priority': item['priority'], 'action': {'type': item['action']}, 'condition': item['condition']})
+        next_id += 1
+    return rules
+
+
 def convert_easylist_network(lines, budget=EASYLIST_BUDGET):
     candidates = []
     skipped = {}
@@ -285,11 +315,12 @@ def convert_easylist_network(lines, budget=EASYLIST_BUDGET):
         candidates.append({'action': action_type, 'condition': condition, 'priority': priority, 'kind': kind, 'exception': exception, 'important': options['important']})
     # Exceptions first, then domain rules, then path rules. Keep under budget.
     candidates.sort(key=lambda r: (0 if r['exception'] else 1, 0 if r['kind'] == 'domain' else 1, 0 if r['important'] else 1))
-    cut = max(0, len(candidates) - budget)
-    selected = candidates[:budget]
-    rules = []
-    for idx, item in enumerate(selected, 1):
-        rules.append({'id': idx, 'priority': item['priority'], 'action': {'type': item['action']}, 'condition': item['condition']})
+    # Merge domain-only candidates before applying the budget. One DNR rule can hold many requestDomains.
+    rules = merge_domain_rules_from_items(candidates, 1)
+    cut = max(0, len(rules) - budget)
+    rules = rules[:budget]
+    for idx, rule in enumerate(rules, 1):
+        rule['id'] = idx
     for domain, selectors in list(cosmetic_site.items()):
         excepted = set()
         parts = domain.split('.')
@@ -297,7 +328,7 @@ def convert_easylist_network(lines, budget=EASYLIST_BUDGET):
             excepted |= cosmetic_exceptions.get('.'.join(parts[i:]), set())
         cosmetic_site[domain] = [sel for sel in selectors if sel not in excepted]
     cosmetic = {'generic': sorted(set(cosmetic_generic))[:1500], 'sites': {k: sorted(set(v))[:1000] for k, v in sorted(cosmetic_site.items()) if v}}
-    meta = {'networkCandidates': len(candidates), 'networkRules': len(rules), 'cutForBudget': cut, 'skipped': skipped, 'cosmeticGeneric': len(cosmetic['generic']), 'cosmeticSiteDomains': len(cosmetic['sites']), 'cosmeticSiteSelectors': sum(len(v) for v in cosmetic['sites'].values())}
+    meta = {'networkCandidates': len(candidates), 'networkRules': len(rules), 'mergedDomainRules': sum(1 for r in rules if len(r.get('condition', {}).get('requestDomains', [])) > 1), 'coveredCandidates': len(candidates) - cut, 'cutForBudget': cut, 'skipped': skipped, 'cosmeticGeneric': len(cosmetic['generic']), 'cosmeticSiteDomains': len(cosmetic['sites']), 'cosmeticSiteSelectors': sum(len(v) for v in cosmetic['sites'].values())}
     return rules, cosmetic, meta
 
 
@@ -336,8 +367,10 @@ def build_rules(disconnect_data, easylist_text=None):
             allow_groups.setdefault(rec.get('companyId'), {'domains': [], 'initiators': excluded})['domains'].append(domain)
     for category, rules in by_category.items():
         slug = category.lower()
-        (rules_dir / f'block_{slug}.json').write_text(json.dumps(rules, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
-        counts[category] = len(rules)
+        items = [{'priority': r['priority'], 'action': r['action']['type'], 'condition': r['condition']} for r in rules]
+        merged = merge_domain_rules_from_items(items, 1)
+        (rules_dir / f'block_{slug}.json').write_text(json.dumps(merged, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
+        counts[category] = len(merged)
     allow_rules = []
     for group in allow_groups.values():
         domains = sorted(set(group['domains']))
