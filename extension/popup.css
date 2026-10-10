@@ -170,3 +170,5 @@ button[aria-pressed="true"] {
   display: flex;
   flex-direction: column;
 }
+
+.italic { font-style: italic; }

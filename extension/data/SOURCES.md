@@ -14,6 +14,13 @@ Fetched on 2026-10-10.
 - Rule counts: {'Advertising': 2740, 'Analytics': 524, 'Social': 50, 'Fingerprinting': 239, 'Cryptomining': 33} with 3586 block rules and 3586 same-company allow rules.
 - See `THIRD_PARTY_LICENSES.md`. The upstream data file includes the full license notice.
 
+## EasyList
+
+- Source: https://easylist.to/easylist/easylist.txt
+- License: GPL-3.0-only or CC-BY-SA-3.0
+- Output: `../rules/ads_easylist.json` and `easylist_cosmetic.json`
+- Notes: PrivacyBrew converts supported network filters to DNR rules. Unsupported filters are skipped and counted in `../rules/metadata.json`.
+
 ## Public Suffix List
 
 - Source: https://publicsuffix.org/list/public_suffix_list.dat

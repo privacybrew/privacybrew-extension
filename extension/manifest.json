@@ -21,7 +21,8 @@
     "webNavigation",
     "storage",
     "declarativeNetRequest",
-    "scripting"
+    "scripting",
+    "declarativeNetRequestFeedback"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -49,6 +50,17 @@
       "run_at": "document_start",
       "all_frames": true,
       "match_about_blank": true
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "ad-cosmetic.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true
     }
   ],
   "icons": {
@@ -59,6 +71,11 @@
   },
   "declarative_net_request": {
     "rule_resources": [
+      {
+        "id": "ads_easylist",
+        "enabled": true,
+        "path": "rules/ads_easylist.json"
+      },
       {
         "id": "allow_same_company",
         "enabled": true,

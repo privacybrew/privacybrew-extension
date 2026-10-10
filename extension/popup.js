@@ -84,16 +84,19 @@
     setNumberClass($('statFingerprint'), fpCount ? 'warn' : 'good');
     text($('statFingerprintSub'), 'on this page');
     const cookieCount = (report.cookieDomains || []).length;
+    text($('statAdsBlocked'), String(blockingOff ? 0 : (report.adBlockedRequestCount || 0)));
+    setNumberClass($('statAdsBlocked'), !blockingOff && report.adBlockedRequestCount ? 'good' : '');
     text($('statCookies'), String(cookieCount));
     setNumberClass($('statCookies'), cookieCount ? 'warn' : '');
     text($('statCookiesSub'), plural(cookieCount, 'website'));
   }
 
   function renderControls(report) {
-    const settings = report.settings || { blockingEnabled: true, gpcEnabled: true, pausedSites: {} };
+    const settings = report.settings || { blockingEnabled: true, adBlockingEnabled: true, gpcEnabled: true, pausedSites: {} };
     const siteOn = settings.blockingEnabled && !report.sitePaused;
     setToggle($('siteBlockToggle'), siteOn);
     setToggle($('globalBlockToggle'), settings.blockingEnabled);
+    setToggle($('adBlockToggle'), settings.blockingEnabled && settings.adBlockingEnabled);
     setToggle($('gpcToggle'), settings.gpcEnabled);
     $('controlsCard').hidden = report.status !== 'ok';
   }
@@ -187,6 +190,12 @@
     $('globalBlockToggle').addEventListener('click', async () => {
       const enabled = !(currentReport && currentReport.settings && currentReport.settings.blockingEnabled);
       await chrome.runtime.sendMessage({ type: 'setGlobalBlocking', enabled });
+      showReloadHint();
+      await refresh();
+    });
+    $('adBlockToggle').addEventListener('click', async () => {
+      const enabled = !(currentReport && currentReport.settings && currentReport.settings.adBlockingEnabled);
+      await chrome.runtime.sendMessage({ type: 'setAdBlocking', enabled });
       showReloadHint();
       await refresh();
     });

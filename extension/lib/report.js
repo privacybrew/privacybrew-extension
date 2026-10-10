@@ -125,6 +125,28 @@
     return state;
   }
 
+
+  function addAdBlocked(state, url) {
+    if (!url) return state;
+    const key = cleanUrl(url);
+    const hash = hashText(key);
+    state.ads = state.ads || { blockedHashes: {}, samples: {}, cosmeticMs: [] };
+    state.ads.blockedHashes = state.ads.blockedHashes || {};
+    state.ads.samples = state.ads.samples || {};
+    state.ads.blockedHashes[hash] = true;
+    if (Object.keys(state.ads.samples).length < SAMPLE_LIMIT) state.ads.samples[hash] = key;
+    state.updatedAt = Date.now();
+    return state;
+  }
+
+  function addCosmeticTime(state, durationMs) {
+    state.ads = state.ads || { blockedHashes: {}, samples: {}, cosmeticMs: [] };
+    state.ads.cosmeticMs = state.ads.cosmeticMs || [];
+    if (typeof durationMs === 'number') state.ads.cosmeticMs.push(durationMs);
+    state.updatedAt = Date.now();
+    return state;
+  }
+
   function addUnknown(state, domain) {
     if (domain) state.unknownDomains[domain] = true;
     state.updatedAt = Date.now();
@@ -198,6 +220,9 @@
     const outsideScripts = state.outsideScripts || {};
     const outsideScriptUrls = Object.keys(outsideScripts.hashes || outsideScripts.urls || {}).sort();
     const outsideScriptBlockedUrls = Object.keys(outsideScripts.blockedHashes || outsideScripts.blockedUrls || {}).sort();
+    const ads = state.ads || {};
+    const adBlockedRequestCount = Object.keys(ads.blockedHashes || {}).length;
+    const adCosmeticMaxMs = Math.max(0, ...(ads.cosmeticMs || [0]));
     const fingerprints = Object.entries(state.fingerprints || {}).map(([technique, origins]) => ({
       technique,
       label: FINGERPRINT_LABELS[technique] || technique,
@@ -218,6 +243,8 @@
       adAllowedCount,
       outsideScriptCount: outsideScriptUrls.length,
       outsideScriptBlockedCount: outsideScriptBlockedUrls.length,
+      adBlockedRequestCount,
+      adCosmeticMaxMs,
       trackers,
       unknownDomains: Object.keys(state.unknownDomains || {}).sort(),
       cookieDomains: Object.keys(state.cookieDomains || {}).sort(),
@@ -228,5 +255,5 @@
   }
 
   global.PB = global.PB || {};
-  global.PB.Report = { CATEGORY_LINES, CATEGORY_PRIORITY, FINGERPRINT_LABELS, cleanUrl, emptyState, addTracker, addOutsideScript, addUnknown, addCookie, addFingerprint, overallLabel, orderedCategories, plural, summarize };
+  global.PB.Report = { CATEGORY_LINES, CATEGORY_PRIORITY, FINGERPRINT_LABELS, cleanUrl, emptyState, addTracker, addAdBlocked, addCosmeticTime, addOutsideScript, addUnknown, addCookie, addFingerprint, overallLabel, orderedCategories, plural, summarize };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

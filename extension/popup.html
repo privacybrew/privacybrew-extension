@@ -56,6 +56,11 @@
           <span class="stat-label">Fingerprinting</span>
           <span id="statFingerprintSub" class="stat-sub">on this page</span>
         </button>
+        <button class="stat-tile" type="button" data-target="trackersCard">
+          <span id="statAdsBlocked" class="stat-number good">0</span>
+          <span class="stat-label">Ads blocked</span>
+          <span id="statAdsBlockedSub" class="stat-sub italic">It's not a sign. It's a targeted ad.</span>
+        </button>
         <button class="stat-tile stat-wide" type="button" data-target="cookiesCard">
           <span id="statCookies" class="stat-number">0</span>
           <span class="stat-text">
@@ -80,6 +85,10 @@
       <div class="setting-row">
         <span>Block trackers on all websites</span>
         <button id="globalBlockToggle" type="button" aria-pressed="true">On</button>
+      </div>
+      <div class="setting-row">
+        <span>Block ads</span>
+        <button id="adBlockToggle" type="button" aria-pressed="true">On</button>
       </div>
       <div class="setting-row">
         <span>Ask websites not to sell my data</span>
@@ -121,9 +130,9 @@
     </section>
 
     <footer class="footer">
-      <p>PrivacyBrew blocks known trackers only.</p>
-      <p>Some websites can break.</p>
-      <p>Turn off blocking for that website.</p>
+      <p>PrivacyBrew blocks known trackers and ads.</p>
+      <p>It cannot block all video ads.</p>
+      <p>Some websites can break. Turn off blocking for that website.</p>
       <p><a id="dataLink" href="https://disconnect.me/trackerprotection" target="_blank" rel="noreferrer">Tracker list: Disconnect (CC BY-NC-SA 4.0)</a></p>
       <a id="checkLink" href="https://privacybrew.app/check.html" target="_blank" rel="noreferrer">Check your browser's privacy</a>
     </footer>

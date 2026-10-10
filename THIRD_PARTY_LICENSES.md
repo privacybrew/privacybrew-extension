@@ -23,3 +23,12 @@ The Public Suffix List data stays in a separate generated file under MPL-2.0.
 - Project: https://python-pillow.org/
 - License: Historical Permission Notice and Disclaimer.
 - Use: Build-time icon generation only.
+
+## EasyList
+
+- Source: https://easylist.to/easylist/easylist.txt
+- Project: https://easylist.to/
+- License: GPL-3.0-only or CC-BY-SA-3.0
+- Use: Generated ad blocking rules in `extension/rules/ads_easylist.json` and cosmetic selectors in `extension/data/easylist_cosmetic.json`.
+
+EasyList data stays in generated files under its own license.

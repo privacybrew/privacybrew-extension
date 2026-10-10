@@ -43,15 +43,15 @@ The Public Suffix List data file is MPL-2.0. It is a separate generated file und
 
 ## Blocking
 
-PrivacyBrew uses Manifest V3 `declarativeNetRequest` static rules. Blocking is on by default.
+PrivacyBrew uses Manifest V3 `declarativeNetRequest` static rules. Tracker blocking and ad blocking are on by default.
 
-Blocked categories are Advertising, Analytics, Social, Fingerprinting, and Cryptomining. Content is not blocked because pages often need embedded video, maps, and other page parts.
+Blocked tracker categories are Advertising, Analytics, Social, Fingerprinting, and Cryptomining. Content is not blocked because pages often need embedded video, maps, and other page parts. Ads are blocked with EasyList network rules and cosmetic hiding rules.
 
 PrivacyBrew uses same-company allow rules from Disconnect properties. This lets a company website load its own company resources.
 
-You can pause blocking for one website. You can also turn blocking off for all websites. Reload the page after you change blocking.
+You can pause blocking for one website. You can also turn tracker and ad blocking off for all websites. Reload the page after you change blocking.
 
-The toolbar badge shows the number of blocked tracker companies on the current page.
+The toolbar badge shows the number of blocked tracker companies on the current page. Ads are counted separately from trackers. A request can be both a tracker and an ad.
 
 PrivacyBrew counts distinct tracker requests by origin and path. It removes query strings and fragments before storage. This keeps tracking IDs out of local reports and reduces retry noise.
 
@@ -97,3 +97,15 @@ PrivacyBrew blocks known trackers only. It can miss new companies, hidden redire
 - Add cookie controls.
 - Add stronger fingerprint protection.
 - Add user settings and report history.
+
+## Rule priorities
+
+| Priority | Rule type | Purpose |
+|---:|---|---|
+| 10000 | Per-site pause | Allow requests on a paused website. |
+| 300 | EasyList exceptions | Keep allowed ad resources working. |
+| 150 | EasyList important blocks | Block high-priority ad filters. |
+| 100 | EasyList blocks | Block ad requests, including same-company ads. |
+| 3 | Same-company session allow | Keep non-ad company resources working on company-owned sites. |
+| 2 | Same-company static allow | Keep non-ad company resources working. |
+| 1 | Tracker blocks and GPC | Block known trackers and send GPC. |

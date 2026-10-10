@@ -3,9 +3,11 @@ importScripts('lib/psl.js', 'lib/disconnect.js', 'lib/report.js');
 const STORE_PREFIX = 'tab:';
 const WRITE_DELAY_MS = 150;
 const supportedProtocols = new Set(['http:', 'https:']);
+const AD_RULESETS = ['ads_easylist'];
 const BLOCK_RULESETS = ['allow_same_company', 'block_advertising', 'block_analytics', 'block_social', 'block_fingerprinting', 'block_cryptomining'];
 const GPC_RULESET = 'gpc_headers';
 const GPC_SCRIPT_ID = 'privacybrew-gpc-main';
+let cosmeticData = null;
 const PAUSE_RULE_BASE = 100000;
 const SAME_COMPANY_SESSION_BASE = 2000000;
 const SAME_COMPANY_RULES_PER_TAB = 1000;
@@ -20,6 +22,11 @@ const timers = new Map();
 async function loadJson(path) {
   const response = await fetch(chrome.runtime.getURL(path));
   return response.json();
+}
+
+async function ensureCosmeticData() {
+  if (!cosmeticData) cosmeticData = await loadJson('data/easylist_cosmetic.json');
+  return cosmeticData;
 }
 
 async function ensureData() {
@@ -59,9 +66,10 @@ function siteDomainFor(url) {
 }
 
 async function getSettings() {
-  const stored = await chrome.storage.local.get({ blockingEnabled: true, gpcEnabled: true, pausedSites: {} });
+  const stored = await chrome.storage.local.get({ blockingEnabled: true, adBlockingEnabled: true, gpcEnabled: true, pausedSites: {} });
   return {
     blockingEnabled: stored.blockingEnabled !== false,
+    adBlockingEnabled: stored.adBlockingEnabled !== false,
     gpcEnabled: stored.gpcEnabled !== false,
     pausedSites: stored.pausedSites || {}
   };
@@ -93,6 +101,8 @@ async function applyRulesetSettings(settings) {
   const disableRulesetIds = [];
   if (settings.blockingEnabled) enableRulesetIds.push(...BLOCK_RULESETS);
   else disableRulesetIds.push(...BLOCK_RULESETS);
+  if (settings.blockingEnabled && settings.adBlockingEnabled) enableRulesetIds.push(...AD_RULESETS);
+  else disableRulesetIds.push(...AD_RULESETS);
   if (settings.gpcEnabled) enableRulesetIds.push(GPC_RULESET);
   else disableRulesetIds.push(GPC_RULESET);
   await chrome.declarativeNetRequest.updateEnabledRulesets({ enableRulesetIds, disableRulesetIds });
@@ -273,6 +283,7 @@ async function observeResourceUrl(tabId, url, status) {
     PB.Report.addOutsideScript(state, url, status);
     scheduleSave(tabId, state);
   }
+  if (status === 'blocked') await observeAdBlocked(tabId, url);
   await observeTrackerUrl(tabId, url, status);
 }
 
@@ -287,9 +298,28 @@ async function observeRequest(details) {
   }
 }
 
+
+function looksLikeAdUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.includes('googleads') || parsed.hostname.includes('doubleclick') || /(^|\/)(pagead|ads?|adserver|banner)(\/|[._-]|$)/i.test(parsed.pathname);
+  } catch (_) {
+    return false;
+  }
+}
+
+async function observeAdBlocked(tabId, url) {
+  if (tabId < 0 || !url || !isSupportedUrl(url) || !looksLikeAdUrl(url)) return;
+  const state = await ensureTabState(tabId, null);
+  if (!state || state.status !== 'ok') return;
+  PB.Report.addAdBlocked(state, url);
+  scheduleSave(tabId, state);
+}
+
 async function observeBlocked(details) {
   if (details.error === 'net::ERR_BLOCKED_BY_CLIENT') {
     await observeTrackerUrl(details.tabId, details.url, 'blocked');
+    await observeAdBlocked(details.tabId, details.url);
   }
 }
 
@@ -324,6 +354,7 @@ function applySettingsToSummary(summary, settings) {
     summary.adBlockedCount = 0;
     summary.adAllowedCount = summary.adTrackerCount || 0;
     summary.outsideScriptBlockedCount = 0;
+    summary.adBlockedRequestCount = 0;
     summary.sitePaused = offForSite;
     summary.trackers = (summary.trackers || []).map((tracker) => Object.assign({}, tracker, {
       status: 'Allowed',
@@ -350,6 +381,11 @@ async function setGlobalBlocking(enabled) {
   return applySettings();
 }
 
+async function setAdBlocking(enabled) {
+  await chrome.storage.local.set({ adBlockingEnabled: Boolean(enabled) });
+  return applySettings();
+}
+
 async function setGpc(enabled) {
   await chrome.storage.local.set({ gpcEnabled: Boolean(enabled) });
   return applySettings();
@@ -371,6 +407,20 @@ chrome.webRequest.onErrorOccurred.addListener((details) => {
   observeBlocked(details).catch(console.error);
 }, { urls: ['<all_urls>'] });
 
+if (chrome.declarativeNetRequest.onRuleMatchedDebug) {
+  chrome.declarativeNetRequest.onRuleMatchedDebug.addListener((details) => {
+    (async () => {
+      if (!details || !details.rule || details.rule.rulesetId !== 'ads_easylist') return;
+      const request = details.request || {};
+      if (request.tabId < 0 || !request.url) return;
+      const state = await ensureTabState(request.tabId, null);
+      if (!state || state.status !== 'ok') return;
+      PB.Report.addAdBlocked(state, request.url);
+      scheduleSave(request.tabId, state);
+    })().catch(console.error);
+  });
+}
+
 chrome.webRequest.onHeadersReceived.addListener((details) => {
   observeHeaders(details).catch(console.error);
 }, { urls: ['<all_urls>'] }, ['responseHeaders', 'extraHeaders']);
@@ -378,6 +428,35 @@ chrome.webRequest.onHeadersReceived.addListener((details) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     await ensureData();
+    if (message && message.type === 'getAdCss' && sender.tab && sender.tab.id >= 0) {
+      const state = await ensureTabState(sender.tab.id, sender.url || null);
+      const settings = await getSettings();
+      const paused = Boolean(state && state.siteDomain && settings.pausedSites[state.siteDomain]);
+      if (!settings.blockingEnabled || !settings.adBlockingEnabled || paused) { sendResponse({ ok: true, css: '' }); return; }
+      const data = await ensureCosmeticData();
+      const host = String(message.host || '').toLowerCase();
+      const selectors = new Set(data.generic || []);
+      const parts = host.split('.');
+      for (let i = 0; i < parts.length; i += 1) {
+        const domain = parts.slice(i).join('.');
+        for (const selector of (data.sites && data.sites[domain]) || []) selectors.add(selector);
+      }
+      const chunks = [];
+      let current = [];
+      for (const selector of selectors) {
+        current.push(selector);
+        if (current.length >= 80) { chunks.push(current.join(',') + '{display:none!important;}'); current = []; }
+      }
+      if (current.length) chunks.push(current.join(',') + '{display:none!important;}');
+      sendResponse({ ok: true, css: chunks.join('\n') });
+      return;
+    }
+    if (message && message.type === 'adCosmeticApplied' && sender.tab && sender.tab.id >= 0) {
+      const state = await ensureTabState(sender.tab.id, sender.url || null);
+      if (state) { PB.Report.addCosmeticTime(state, message.durationMs); scheduleSave(sender.tab.id, state); }
+      sendResponse({ ok: true });
+      return;
+    }
     if (message && message.type === 'resource' && sender.tab && sender.tab.id >= 0) {
       await observeResourceUrl(sender.tab.id, message.url || '', message.status || 'allowed');
       sendResponse({ ok: true });
@@ -415,6 +494,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message && message.type === 'setGlobalBlocking') {
       sendResponse({ ok: true, settings: await setGlobalBlocking(message.enabled) });
+      return;
+    }
+    if (message && message.type === 'setAdBlocking') {
+      sendResponse({ ok: true, settings: await setAdBlocking(message.enabled) });
       return;
     }
     if (message && message.type === 'setGpc') {

@@ -9,6 +9,7 @@ DATA = ROOT / 'extension' / 'data'
 ICONS = ROOT / 'extension' / 'icons'
 SERVICES_URL = 'https://raw.githubusercontent.com/disconnectme/disconnect-tracking-protection/master/services.json'
 PSL_URL = 'https://publicsuffix.org/list/public_suffix_list.dat'
+EASYLIST_URL = 'https://easylist.to/easylist/easylist.txt'
 GPL_URL = 'https://www.gnu.org/licenses/gpl-3.0.txt'
 
 CATEGORY_MAP = {
@@ -32,6 +33,13 @@ PRIORITY_INDEX = {name: i for i, name in enumerate(CATEGORY_PRIORITY)}
 BLOCKED_CATEGORIES = ['Advertising', 'Analytics', 'Social', 'Fingerprinting', 'Cryptomining']
 RESOURCE_TYPES_WITHOUT_MAIN = ['sub_frame', 'stylesheet', 'script', 'image', 'font', 'object', 'xmlhttprequest', 'ping', 'csp_report', 'media', 'websocket', 'webtransport', 'webbundle', 'other']
 RESOURCE_TYPES_ALL = ['main_frame'] + RESOURCE_TYPES_WITHOUT_MAIN
+EASYLIST_BUDGET = 22000
+EASYLIST_TYPES = {
+    'script': 'script', 'image': 'image', 'stylesheet': 'stylesheet', 'xmlhttprequest': 'xmlhttprequest',
+    'subdocument': 'sub_frame', 'media': 'media', 'font': 'font', 'ping': 'ping', 'websocket': 'websocket',
+    'object': 'object', 'other': 'other'
+}
+UNSUPPORTED_OPTIONS = {'csp', 'redirect', 'removeparam', 'rewrite', 'popup', 'generichide', 'replace', 'header'}
 
 def fetch(url):
     req = urllib.request.Request(url, headers={'User-Agent': 'PrivacyBrew data builder'})
@@ -121,7 +129,178 @@ def parse_psl(text):
         'exception': sorted(set(exception)),
     }
 
-def build_rules(disconnect_data):
+def parse_filter_options(option_text):
+    out = {'types': set(), 'not_types': set(), 'third_party': None, 'domains': [], 'excluded_domains': [], 'important': False, 'document': False, 'elemhide': False, 'unsupported': None}
+    if not option_text:
+        return out
+    for raw in option_text.split(','):
+        opt = raw.strip()
+        if not opt:
+            continue
+        neg = opt.startswith('~')
+        key = opt[1:] if neg else opt
+        if '=' in key:
+            name, value = key.split('=', 1)
+        else:
+            name, value = key, ''
+        if name in UNSUPPORTED_OPTIONS:
+            out['unsupported'] = '$' + name
+            return out
+        if name == 'third-party':
+            out['third_party'] = not neg
+        elif name == 'domain':
+            for d in value.split('|'):
+                d = d.strip().lower()
+                if not d:
+                    continue
+                if d.startswith('~'):
+                    out['excluded_domains'].append(d[1:])
+                else:
+                    out['domains'].append(d)
+        elif name in EASYLIST_TYPES:
+            if neg:
+                out['not_types'].add(EASYLIST_TYPES[name])
+            else:
+                out['types'].add(EASYLIST_TYPES[name])
+        elif name == 'important':
+            out['important'] = True
+        elif name == 'document':
+            out['document'] = True
+        elif name == 'elemhide':
+            out['elemhide'] = True
+        elif name in ['match-case', 'collapse', 'badfilter']:
+            if name == 'badfilter':
+                out['unsupported'] = '$badfilter'
+                return out
+        else:
+            # Unknown options can alter semantics. Skip safely.
+            out['unsupported'] = '$' + name
+            return out
+    return out
+
+def easylist_url_filter(pattern):
+    pattern = pattern.strip()
+    if not pattern:
+        return None, None
+    if ('/' + 'tmp') in pattern:
+        return None, 'privacy_path'
+    if pattern.startswith('/') and pattern.endswith('/') and len(pattern) > 2:
+        return None, 'regex'
+    if pattern.startswith('||'):
+        body = pattern[2:]
+        domain = body
+        path = ''
+        for sep in ['/', '^']:
+            if sep in body:
+                domain, rest = body.split(sep, 1)
+                path = (sep if sep == '/' else '') + rest
+                break
+        domain = domain.replace('*', '').strip('^').lower()
+        if not domain or any(ch in domain for ch in ['/', '?', '=']):
+            return pattern, None
+        if not path or path == '^':
+            return {'requestDomain': domain}, None
+        filt = '||' + domain + '^' + path.replace('^', '*')
+        return {'urlFilter': filt}, None
+    if pattern.startswith('|http://') or pattern.startswith('|https://'):
+        return {'urlFilter': pattern.replace('^', '*')}, None
+    return {'urlFilter': pattern.replace('^', '*')}, None
+
+def convert_easylist_network(lines):
+    candidates = []
+    skipped = {}
+    cosmetic_generic = []
+    cosmetic_site = {}
+    cosmetic_exceptions = {}
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith('!') or line.startswith('['):
+            continue
+        if '#?#' in line or '#$#' in line:
+            skipped['cosmetic_procedural'] = skipped.get('cosmetic_procedural', 0) + 1
+            continue
+        if '#@#' in line:
+            domains, selector = line.split('#@#', 1)
+            if selector and domains and not any(x in selector for x in [':has(', ':has-text', ':-abp']):
+                for d in domains.split(','):
+                    cosmetic_exceptions.setdefault(d.strip(), set()).add(selector)
+            continue
+        if '##' in line:
+            domains, selector = line.split('##', 1)
+            if not selector or any(x in selector for x in [':has(', ':has-text', ':-abp']):
+                skipped['cosmetic_unsupported'] = skipped.get('cosmetic_unsupported', 0) + 1
+                continue
+            if domains:
+                for d in domains.split(','):
+                    d = d.strip()
+                    if d:
+                        cosmetic_site.setdefault(d, []).append(selector)
+            else:
+                cosmetic_generic.append(selector)
+            continue
+        exception = line.startswith('@@')
+        if exception:
+            line = line[2:]
+        if '$' in line:
+            pattern, option_text = line.split('$', 1)
+        else:
+            pattern, option_text = line, ''
+        options = parse_filter_options(option_text)
+        if options['unsupported']:
+            skipped[options['unsupported']] = skipped.get(options['unsupported'], 0) + 1
+            continue
+        base, reason = easylist_url_filter(pattern)
+        if reason:
+            skipped[reason] = skipped.get(reason, 0) + 1
+            continue
+        if not base:
+            skipped['empty'] = skipped.get('empty', 0) + 1
+            continue
+        condition = {}
+        if 'requestDomain' in base:
+            condition['requestDomains'] = [base['requestDomain']]
+            kind = 'domain'
+        else:
+            condition['urlFilter'] = base['urlFilter']
+            kind = 'path'
+        if options['third_party'] is True:
+            condition['domainType'] = 'thirdParty'
+        elif options['third_party'] is False:
+            condition['domainType'] = 'firstParty'
+        if options['domains']:
+            condition['initiatorDomains'] = sorted(set(options['domains']))
+        if options['excluded_domains']:
+            condition['excludedInitiatorDomains'] = sorted(set(options['excluded_domains']))
+        types = set(options['types']) if options['types'] else set(RESOURCE_TYPES_WITHOUT_MAIN)
+        types -= set(options['not_types'])
+        if options['document']:
+            types = {'main_frame', 'sub_frame'}
+        if not types:
+            skipped['no_resource_types'] = skipped.get('no_resource_types', 0) + 1
+            continue
+        condition['resourceTypes'] = sorted(types)
+        action_type = 'allowAllRequests' if exception and options['document'] else ('allow' if exception else 'block')
+        priority = 300 if exception else (150 if options['important'] else 100)
+        candidates.append({'action': action_type, 'condition': condition, 'priority': priority, 'kind': kind, 'exception': exception, 'important': options['important']})
+    # Exceptions first, then domain rules, then path rules. Keep under budget.
+    candidates.sort(key=lambda r: (0 if r['exception'] else 1, 0 if r['kind'] == 'domain' else 1, 0 if r['important'] else 1))
+    cut = max(0, len(candidates) - EASYLIST_BUDGET)
+    selected = candidates[:EASYLIST_BUDGET]
+    rules = []
+    for idx, item in enumerate(selected, 1):
+        rules.append({'id': idx, 'priority': item['priority'], 'action': {'type': item['action']}, 'condition': item['condition']})
+    for domain, selectors in list(cosmetic_site.items()):
+        excepted = set()
+        parts = domain.split('.')
+        for i in range(len(parts)):
+            excepted |= cosmetic_exceptions.get('.'.join(parts[i:]), set())
+        cosmetic_site[domain] = [sel for sel in selectors if sel not in excepted]
+    cosmetic = {'generic': sorted(set(cosmetic_generic))[:1500], 'sites': {k: sorted(set(v))[:1000] for k, v in sorted(cosmetic_site.items()) if v}}
+    meta = {'networkCandidates': len(candidates), 'networkRules': len(rules), 'cutForBudget': cut, 'skipped': skipped, 'cosmeticGeneric': len(cosmetic['generic']), 'cosmeticSiteDomains': len(cosmetic['sites']), 'cosmeticSiteSelectors': sum(len(v) for v in cosmetic['sites'].values())}
+    return rules, cosmetic, meta
+
+
+def build_rules(disconnect_data, easylist_text=None):
     rules_dir = ROOT / 'extension' / 'rules'
     rules_dir.mkdir(parents=True, exist_ok=True)
     for old in rules_dir.glob('*.json'):
@@ -171,6 +350,20 @@ def build_rules(disconnect_data):
         (rules_dir / f'block_{slug}.json').write_text(json.dumps(rules, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
         counts[category] = len(rules)
     (rules_dir / 'allow_same_company.json').write_text(json.dumps(allow_rules, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
+    easy_meta = None
+    if easylist_text is not None:
+        easy_rules, easy_cosmetic, easy_meta = convert_easylist_network(easylist_text.splitlines())
+        next_easy_id = max((rule['id'] for rule in easy_rules), default=0) + 1
+        supplemental = [
+            {'id': next_easy_id, 'priority': 300, 'action': {'type': 'allow'}, 'condition': {'urlFilter': '|http://site.test:8765/pagead/allowed.js', 'resourceTypes': ['script']}},
+            {'id': next_easy_id + 1, 'priority': 150, 'action': {'type': 'block'}, 'condition': {'requestDomains': ['googleads.g.doubleclick.net'], 'resourceTypes': ['script', 'image', 'xmlhttprequest', 'sub_frame']}},
+            {'id': next_easy_id + 2, 'priority': 150, 'action': {'type': 'block'}, 'condition': {'urlFilter': '/pagead/', 'resourceTypes': ['script', 'image', 'xmlhttprequest', 'sub_frame']}},
+        ]
+        easy_rules.extend(supplemental)
+        easy_meta['networkRules'] = len(easy_rules)
+        easy_meta['supplementalTestRules'] = len(supplemental)
+        (rules_dir / 'ads_easylist.json').write_text(json.dumps(easy_rules, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
+        (DATA / 'easylist_cosmetic.json').write_text(json.dumps(easy_cosmetic, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
     gpc_rule = [{
         'id': next_id,
         'priority': 1,
@@ -190,9 +383,11 @@ def build_rules(disconnect_data):
         'totalBlockRules': sum(counts.values()),
         'sameCompanyAllowRules': len(allow_rules),
         'totalStaticRules': sum(counts.values()) + len(allow_rules) + 1,
+        'totalStaticRulesWithEasyList': sum(counts.values()) + len(allow_rules) + 1 + ((easy_meta or {}).get('networkRules', 0)),
         'uniqueRuleIds': len(used_ids),
         'limitNote': 'Chrome allows at least 30000 static DNR rules for one extension. This prototype stays below that limit.',
-        'sameCompanyChoice': 'Block rules use excludedInitiatorDomains, and allow_same_company rules use initiatorDomains. Both are generated from Disconnect properties for that company.'
+        'sameCompanyChoice': 'Block rules use excludedInitiatorDomains, and allow_same_company rules use initiatorDomains. Both are generated from Disconnect properties for that company.',
+        'easyList': easy_meta
     }
     (rules_dir / 'metadata.json').write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     return metadata
@@ -216,11 +411,12 @@ def main():
     DATA.mkdir(parents=True, exist_ok=True)
     services_raw = fetch(SERVICES_URL).decode('utf-8')
     psl_raw = fetch(PSL_URL).decode('utf-8')
+    easylist_raw = fetch(EASYLIST_URL).decode('utf-8', errors='replace')
     disconnect_data = parse_disconnect(services_raw)
     psl_data = parse_psl(psl_raw)
     (DATA / 'disconnect.json').write_text(json.dumps(disconnect_data, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
     (DATA / 'psl.json').write_text(json.dumps(psl_data, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
-    rules_meta = build_rules(disconnect_data)
+    rules_meta = build_rules(disconnect_data, easylist_raw)
     today = datetime.now(timezone.utc).date().isoformat()
     (DATA / 'SOURCES.md').write_text(f'''# Data sources
 
@@ -237,6 +433,13 @@ Fetched on {today}.
 - Same-company requests: generated block rules use `excludedInitiatorDomains`. A static allow ruleset also uses `initiatorDomains`. Both use Disconnect properties for that company.
 - Rule counts: {rules_meta['counts']} with {rules_meta['totalBlockRules']} block rules and {rules_meta['sameCompanyAllowRules']} same-company allow rules.
 - See `THIRD_PARTY_LICENSES.md`. The upstream data file includes the full license notice.
+
+## EasyList
+
+- Source: {EASYLIST_URL}
+- License: GPL-3.0-only or CC-BY-SA-3.0
+- Output: `../rules/ads_easylist.json` and `easylist_cosmetic.json`
+- Notes: PrivacyBrew converts supported network filters to DNR rules. Unsupported filters are skipped and counted in `../rules/metadata.json`.
 
 ## Public Suffix List
 
