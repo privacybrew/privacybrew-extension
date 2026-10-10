@@ -8,6 +8,10 @@
 </head>
 <body>
   <main class="app" aria-live="polite">
+    <div class="brand" aria-label="PrivacyBrew">
+      <img src="icons/icon-32.png" width="24" height="24" alt="">
+      <span>PrivacyBrew</span>
+    </div>
     <header class="hero">
       <p class="eyebrow">PrivacyBrew report card</p>
       <h1 id="siteName">This website</h1>
@@ -27,7 +31,7 @@
 
     <section class="card">
       <h2>Other websites contacted</h2>
-      <p><span id="unknownCount">0</span> third-party domains. Not on our tracker list.</p>
+      <p id="unknownSummary">No other websites contacted.</p>
       <details id="unknownDetails">
         <summary>Show details</summary>
         <ul id="unknownList"></ul>
@@ -36,7 +40,7 @@
 
     <section class="card">
       <h2>Third-party cookies</h2>
-      <p><span id="cookieCount">0</span> third-party responses tried to set a cookie.</p>
+      <p id="cookieSummary">No third-party websites tried to set a cookie.</p>
       <p class="muted">A cookie can help a company remember this browser.</p>
       <ul id="cookieList"></ul>
     </section>
@@ -52,9 +56,11 @@
       <p>PrivacyBrew finds known trackers only.</p>
       <p>It does not block anything yet.</p>
       <p>Some companies can be missing from this report.</p>
+      <p><a id="dataLink" href="https://disconnect.me/trackerprotection" target="_blank" rel="noreferrer">Tracker list: Disconnect (CC BY-NC-SA 4.0)</a></p>
       <a id="checkLink" href="https://privacybrew.app/check.html" target="_blank" rel="noreferrer">Check your browser's privacy</a>
     </footer>
   </main>
+  <script src="lib/report.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

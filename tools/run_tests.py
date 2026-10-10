@@ -39,6 +39,7 @@ class TestHandler(http.server.BaseHTTPRequestHandler):
 <script src="http://connect.facebook.net:{PORT}/social.js"></script>
 <script src="http://bat.bing.com:{PORT}/bing.js"></script>
 <script src="http://cdn.some-unknown-thirdparty.example:{PORT}/unknown.js"></script>
+<script src="http://site.test:{PORT}/fp.js"></script>
 <h1>Tracker page</h1>'''
             return self.end(body)
         if host == 'clean.test' and path in ['/', '/clean.html']:
@@ -47,9 +48,7 @@ class TestHandler(http.server.BaseHTTPRequestHandler):
             headers = {}
             if host == 'static.doubleclick.net':
                 headers['Set-Cookie'] = 'pbtest=1; SameSite=None'
-            if host == 'cdn.some-unknown-thirdparty.example':
-                body = 'window.unknownLoaded = true;'
-            else:
+            if host == 'site.test' and path == '/fp.js':
                 body = '''
 (() => {
   const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 32;
@@ -60,6 +59,10 @@ class TestHandler(http.server.BaseHTTPRequestHandler):
   if (window.OfflineAudioContext) { try { const ac = new OfflineAudioContext(1, 64, 44100); ac.startRendering(); } catch (e) {} }
   for (let i = 0; i < 22; i++) { ctx.font = '12px Font' + i; ctx.measureText('PrivacyBrew'); }
 })();'''
+            elif host == 'cdn.some-unknown-thirdparty.example':
+                body = 'window.unknownLoaded = true;'
+            else:
+                body = 'window.trackerLoaded = true;'
             return self.end(body, 'application/javascript', headers)
         self.send_response(404); self.end_headers()
 
@@ -215,15 +218,24 @@ def run_e2e(cdp):
     navigate_and_wait(cdp, session, f'http://site.test:{PORT}/tracker.html')
     tab_id, state = storage_report(cdp, sw_session)
     tracker_companies = sorted(v['company'] for v in state.get('trackers', {}).values())
+    by_company = {v['company']: v for v in state.get('trackers', {}).values()}
     fps = sorted(state.get('fingerprints', {}).keys())
+    fp_origins = sorted({origin for origins in state.get('fingerprints', {}).values() for origin in origins.keys()})
     badge = cdp.call('Runtime.evaluate', {'expression': f'new Promise(r => chrome.action.getBadgeText({{tabId:{tab_id}}}, r))', 'awaitPromise': True, 'returnByValue': True}, sw_session)['result']['value']
     checks = []
     checks.append(('tracker company count', len(tracker_companies) >= 3))
     checks.append(('Google detected', 'Google' in tracker_companies))
-    checks.append(('third party cookie', 'doubleclick.net' in state.get('cookieDomains', {})))
+    checks.append(('Google advertising chip', 'Advertising' in by_company.get('Google', {}).get('categories', {})))
+    checks.append(('Google analytics chip', 'Analytics' in by_company.get('Google', {}).get('categories', {})))
+    checks.append(('Meta social or advertising chip', bool({'Social', 'Advertising'} & set(by_company.get('Meta', {}).get('categories', {}).keys()))))
+    checks.append(('Meta not only fingerprinting', set(by_company.get('Meta', {}).get('categories', {}).keys()) != {'Fingerprinting'}))
+    checks.append(('Microsoft advertising chip', 'Advertising' in by_company.get('Microsoft', {}).get('categories', {})))
+    checks.append(('third party cookie', 'static.doubleclick.net' in state.get('cookieDomains', {})))
     checks.append(('unknown domain', 'some-unknown-thirdparty.example' in state.get('unknownDomains', {})))
     for technique in ['canvas', 'webgl', 'audio', 'fonts']:
         checks.append((f'{technique} fingerprint', technique in fps))
+    checks.append(('fingerprint source is page script', f'http://site.test:{PORT}/fp.js' in fp_origins))
+    checks.append(('fingerprint source is not extension', not any(origin.startswith('chrome-extension://') for origin in fp_origins)))
     checks.append(('badge text', badge == str(len(state.get('trackers', {})))))
     popup = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
     popup_session = attach_target(cdp, popup)

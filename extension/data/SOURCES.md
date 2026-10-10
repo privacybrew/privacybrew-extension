@@ -7,7 +7,9 @@ Fetched on 2026-10-10.
 - Source: https://raw.githubusercontent.com/disconnectme/disconnect-tracking-protection/master/services.json
 - License: CC-BY-NC-SA-4.0
 - Output: `disconnect.json`
-- Notes: PrivacyBrew maps Disconnect categories to plain category chips. See `THIRD_PARTY_LICENSES.md`. The upstream data file includes the full license notice.
+- Notes: PrivacyBrew maps Disconnect categories to plain category chips. Email and EmailAggressive map to Other. Anti-fraud and ConsentManagers map to Other. Disconnect maps to Social.
+- Category priority: Advertising, Social, Analytics, Cryptomining, Fingerprinting, Content, Other. A domain in more than one category uses the highest-priority match.
+- See `THIRD_PARTY_LICENSES.md`. The upstream data file includes the full license notice.
 
 ## Public Suffix List
 

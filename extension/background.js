@@ -109,11 +109,12 @@ async function observeRequest(details) {
   if (details.tabId < 0 || !details.url || !isSupportedUrl(details.url)) return;
   const state = await ensureTabState(details.tabId, null);
   if (!state || state.status !== 'ok' || !state.siteDomain) return;
-  const requestDomain = psl.registrableDomain(new URL(details.url).hostname);
+  const requestHost = psl.cleanHost(new URL(details.url).hostname);
+  const requestDomain = psl.registrableDomain(requestHost);
   if (!requestDomain || requestDomain === state.siteDomain) return;
-  const match = disconnect.find(requestDomain);
+  const match = disconnect.find(requestHost);
   if (match && !disconnect.sameCompanyAsSite(match, state.siteDomain)) {
-    PB.Report.addTracker(state, match, requestDomain);
+    PB.Report.addTracker(state, match, requestHost);
   } else if (!match) {
     PB.Report.addUnknown(state, requestDomain);
   }
@@ -125,9 +126,10 @@ async function observeHeaders(details) {
   if (details.tabId < 0 || !hasSetCookie(details.responseHeaders) || !details.url || !isSupportedUrl(details.url)) return;
   const state = await ensureTabState(details.tabId, null);
   if (!state || state.status !== 'ok' || !state.siteDomain) return;
-  const responseDomain = psl.registrableDomain(new URL(details.url).hostname);
+  const responseHost = psl.cleanHost(new URL(details.url).hostname);
+  const responseDomain = psl.registrableDomain(responseHost);
   if (responseDomain && responseDomain !== state.siteDomain) {
-    PB.Report.addCookie(state, responseDomain);
+    PB.Report.addCookie(state, responseHost);
     scheduleSave(details.tabId, state);
   }
 }

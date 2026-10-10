@@ -9,6 +9,8 @@
     Cryptomining: 'Mining scripts can use your device to make digital coins.',
     Other: 'This company is on a tracker list, but the type is not clear.'
   };
+  const CATEGORY_PRIORITY = ['Advertising', 'Social', 'Analytics', 'Cryptomining', 'Fingerprinting', 'Content', 'Other'];
+  const CATEGORY_RANK = CATEGORY_PRIORITY.reduce((out, name, index) => { out[name] = index; return out; }, {});
   const FINGERPRINT_LABELS = {
     canvas: 'Canvas readout',
     webgl: 'WebGL graphics card readout',
@@ -35,7 +37,13 @@
     if (!match || !match.companyId) return state;
     const key = match.companyId;
     if (!state.trackers[key]) {
-      state.trackers[key] = { company: match.company, category: match.category || 'Other', domains: {} };
+      state.trackers[key] = { company: match.company, category: match.category || 'Other', categories: {}, domains: {} };
+    }
+    const category = match.category || 'Other';
+    state.trackers[key].categories = state.trackers[key].categories || {};
+    state.trackers[key].categories[category] = true;
+    if (CATEGORY_RANK[category] < CATEGORY_RANK[state.trackers[key].category || 'Other']) {
+      state.trackers[key].category = category;
     }
     state.trackers[key].domains[requestDomain] = true;
     state.updatedAt = Date.now();
@@ -75,13 +83,26 @@
     return hasFingerprinting ? bump(label) : label;
   }
 
+  function orderedCategories(categories) {
+    const names = Object.keys(categories || {});
+    return names.sort((a, b) => (CATEGORY_RANK[a] ?? 99) - (CATEGORY_RANK[b] ?? 99) || a.localeCompare(b));
+  }
+
+  function plural(count, singular, pluralText) {
+    return count === 1 ? singular : (pluralText || singular + 's');
+  }
+
   function summarize(state) {
-    const trackers = Object.entries(state.trackers || {}).map(([companyId, value]) => ({
-      companyId,
-      company: value.company,
-      category: value.category || 'Other',
-      domains: Object.keys(value.domains || {}).sort()
-    })).sort((a, b) => a.category.localeCompare(b.category) || a.company.localeCompare(b.company));
+    const trackers = Object.entries(state.trackers || {}).map(([companyId, value]) => {
+      const categories = orderedCategories(value.categories || { [value.category || 'Other']: true });
+      return {
+        companyId,
+        company: value.company,
+        category: categories[0] || 'Other',
+        categories,
+        domains: Object.keys(value.domains || {}).sort()
+      };
+    }).sort((a, b) => (CATEGORY_RANK[a.category] ?? 99) - (CATEGORY_RANK[b.category] ?? 99) || a.company.localeCompare(b.company));
     const fingerprints = Object.entries(state.fingerprints || {}).map(([technique, origins]) => ({
       technique,
       label: FINGERPRINT_LABELS[technique] || technique,
@@ -103,5 +124,5 @@
   }
 
   global.PB = global.PB || {};
-  global.PB.Report = { CATEGORY_LINES, FINGERPRINT_LABELS, emptyState, addTracker, addUnknown, addCookie, addFingerprint, overallLabel, summarize };
+  global.PB.Report = { CATEGORY_LINES, CATEGORY_PRIORITY, FINGERPRINT_LABELS, emptyState, addTracker, addUnknown, addCookie, addFingerprint, overallLabel, orderedCategories, plural, summarize };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

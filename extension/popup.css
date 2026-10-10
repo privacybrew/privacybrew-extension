@@ -21,6 +21,16 @@ body {
   font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 .app { padding: 14px; }
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 2px 12px;
+  color: var(--text);
+  font-weight: 800;
+  letter-spacing: .01em;
+}
+.brand img { border-radius: 8px; }
 .hero, .card, .footer {
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -35,14 +45,18 @@ h2 { font-size: 15px; margin: 0 0 8px; }
 p { margin: 0 0 8px; }
 ul { margin: 8px 0 0; padding-left: 18px; }
 li { margin: 4px 0; overflow-wrap: anywhere; }
-.status { color: var(--accent-2); font-weight: 700; margin: 0; }
+.status { color: var(--accent); font-weight: 700; margin: 0; }
+.status.low { color: var(--accent-2); }
+.status.some { color: var(--accent); }
+.status.high { color: var(--warning); }
 .muted { color: var(--text-dim); }
 .company {
   border-top: 1px solid var(--border);
   padding-top: 10px;
   margin-top: 10px;
 }
-.company-head { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.company-head { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
+.chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .company-name { font-weight: 700; overflow-wrap: anywhere; }
 .chip {
   display: inline-flex;

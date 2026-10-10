@@ -7,7 +7,7 @@
 - License: CC-BY-NC-SA-4.0
 - Use: Generated tracker company and domain data in `extension/data/disconnect.json`.
 
-The upstream data file says it is licensed under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International. This prototype records that license in generated data. Review this before any public release.
+The extension code is GPLv3. The Disconnect data stays in a separate generated file under its own license. The license is Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International. It is non-commercial and share-alike.
 
 ## Public Suffix List
 
@@ -15,6 +15,8 @@ The upstream data file says it is licensed under Creative Commons Attribution-No
 - Project: https://publicsuffix.org/
 - License: MPL-2.0
 - Use: Generated suffix rules in `extension/data/psl.json`.
+
+The Public Suffix List data stays in a separate generated file under MPL-2.0.
 
 ## Python Pillow
 

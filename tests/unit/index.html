@@ -31,17 +31,30 @@
   test('PSL keeps localhost', () => eq(psl.registrableDomain('localhost'), 'localhost', 'localhost'));
   test('Disconnect matches subdomains', () => ok(disconnect.find('www.google-analytics.com'), 'google analytics match'));
   test('Disconnect maps company', () => eq(disconnect.find('static.doubleclick.net').company, 'Google', 'doubleclick company'));
+  test('Disconnect gives bat.bing.com advertising priority', () => eq(disconnect.find('bat.bing.com').category, 'Advertising', 'bat bing category'));
+  test('Disconnect gives facebook.net social priority', () => eq(disconnect.find('facebook.net').category, 'Social', 'facebook category'));
   test('Disconnect treats owned property as first party', () => ok(disconnect.sameCompanyAsSite(disconnect.find('doubleclick.net'), 'google.com'), 'Google property is same company'));
   test('Disconnect does not treat other site as first party', () => ok(!disconnect.sameCompanyAsSite(disconnect.find('doubleclick.net'), 'example.com'), 'example is not Google'));
   test('Overall label low', () => eq(PB.Report.overallLabel(2, false), 'Little tracking found', 'low label'));
   test('Overall label middle', () => eq(PB.Report.overallLabel(3, false), 'Some tracking', 'middle label'));
   test('Overall label high', () => eq(PB.Report.overallLabel(6, false), 'A lot of tracking', 'high label'));
   test('Fingerprint bumps label', () => eq(PB.Report.overallLabel(1, true), 'Some tracking', 'fingerprint bump'));
+  test('Plural helper keeps singular', () => eq(PB.Report.plural(1, 'company', 'companies'), 'company', 'singular plural'));
+  test('Plural helper uses plural', () => eq(PB.Report.plural(2, 'company', 'companies'), 'companies', 'plural helper'));
   test('Report summarizes distinct trackers', () => {
     const s = PB.Report.emptyState(1, 'https://example.com', 'example.com');
     PB.Report.addTracker(s, disconnect.find('google-analytics.com'), 'google-analytics.com');
     PB.Report.addTracker(s, disconnect.find('doubleclick.net'), 'doubleclick.net');
     eq(PB.Report.summarize(s).trackerCount, 1, 'same company count');
+  });
+  test('Report keeps multiple company categories', () => {
+    const s = PB.Report.emptyState(1, 'https://example.com', 'example.com');
+    PB.Report.addTracker(s, disconnect.find('google-analytics.com'), 'google-analytics.com');
+    PB.Report.addTracker(s, disconnect.find('doubleclick.net'), 'doubleclick.net');
+    const tracker = PB.Report.summarize(s).trackers[0];
+    ok(tracker.categories.includes('Advertising'), 'advertising category');
+    ok(tracker.categories.includes('Analytics'), 'analytics category');
+    eq(tracker.category, 'Advertising', 'highest priority category');
   });
 
   window.__TEST_DONE__ = { pass: results.filter(r => r.ok).length, fail: results.filter(r => !r.ok).length, results };

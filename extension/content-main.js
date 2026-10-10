@@ -15,11 +15,16 @@
   function scriptOrigin() {
     try {
       const stack = String(new Error().stack || '');
-      const match = stack.match(/(?:https?|file|chrome-extension):\/\/[^\s)]+/);
-      if (match) return match[0].split(':').slice(0, 2).join(':');
-      return location.origin;
+      const matches = stack.match(/(?:https?|file|chrome-extension):\/\/[^\s)]+/g) || [];
+      for (const raw of matches) {
+        const url = raw.replace(/:\d+:\d+$/, '').replace(/:\d+$/, '');
+        if (url.startsWith('chrome-extension://')) continue;
+        if (url.endsWith('/content-main.js')) continue;
+        return url;
+      }
+      return 'Script not known';
     } catch (_) {
-      return location.origin;
+      return 'Script not known';
     }
   }
 

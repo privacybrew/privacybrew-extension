@@ -32,6 +32,15 @@ python3 tools/run_tests.py
 
 The test runner starts local HTTP servers and headless Chrome. It maps test host names to `127.0.0.1`, so tracker test requests do not go to the real internet.
 
+
+## Licenses
+
+The extension code is GPLv3. See `LICENSE`.
+
+The Disconnect data file is CC BY-NC-SA 4.0. It is a separate generated file under its own license. It is non-commercial and share-alike.
+
+The Public Suffix List data file is MPL-2.0. It is a separate generated file under its own license.
+
 ## Report labels
 
 PrivacyBrew counts distinct tracker companies seen on the page.
@@ -40,6 +49,13 @@ PrivacyBrew counts distinct tracker companies seen on the page.
 - 3 to 5 companies: Some tracking.
 - 6 or more companies: A lot of tracking.
 - Fingerprinting pushes the label up one level.
+
+
+## Tracker categories
+
+A tracker domain can appear in more than one Disconnect category. PrivacyBrew uses this priority order: Advertising, Social, Analytics, Cryptomining, Fingerprinting, Content, Other.
+
+Email and EmailAggressive map to Other. Anti-fraud and ConsentManagers map to Other. Disconnect maps to Social.
 
 ## Fingerprinting signals
 
