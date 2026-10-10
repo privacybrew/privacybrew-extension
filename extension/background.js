@@ -240,8 +240,7 @@ async function observeTrackerUrl(tabId, url, status) {
   if (match && !disconnect.sameCompanyAsSite(match, state.siteDomain)) {
     const settings = await getSettings();
     const paused = Boolean(settings.pausedSites[state.siteDomain]);
-    const wouldBlock = settings.blockingEnabled && !paused && BLOCKED_CATEGORIES.has(match.category);
-    const blocked = status === 'blocked' || (status === 'seen' && wouldBlock);
+    const blocked = status === 'blocked' && settings.blockingEnabled && !paused;
     PB.Report.addTracker(state, match, requestHost, blocked ? 'blocked' : 'allowed');
   } else if (!match) {
     PB.Report.addUnknown(state, requestDomain);
@@ -276,6 +275,23 @@ function resetOnTopFrame(details) {
   if (details.frameId === 0 && details.tabId >= 0) {
     resetTab(details.tabId, details.url).catch(console.error);
   }
+}
+
+
+function applySettingsToSummary(summary, settings) {
+  if (!summary || !settings) return summary;
+  const offForSite = Boolean(summary.siteDomain && settings.pausedSites[summary.siteDomain]);
+  if (!settings.blockingEnabled || offForSite) {
+    summary.blockedTrackerCount = 0;
+    summary.blockedCompanyCount = 0;
+    summary.sitePaused = offForSite;
+    summary.trackers = (summary.trackers || []).map((tracker) => Object.assign({}, tracker, {
+      status: 'Allowed',
+      allowedDomains: Array.from(new Set([...(tracker.allowedDomains || []), ...(tracker.blockedDomains || [])])).sort(),
+      blockedDomains: []
+    }));
+  }
+  return summary;
 }
 
 async function setPaused(siteDomain, paused) {
@@ -341,7 +357,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message && message.type === 'getReport') {
       const state = await ensureTabState(message.tabId, null);
       const settings = await getSettings();
-      const summary = state ? PB.Report.summarize(state) : { status: 'needReload' };
+      const summary = applySettingsToSummary(state ? PB.Report.summarize(state) : { status: 'needReload' }, settings);
       summary.settings = settings;
       summary.sitePaused = Boolean(summary.siteDomain && settings.pausedSites[summary.siteDomain]);
       sendResponse({ ok: true, report: summary });
@@ -373,7 +389,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message && message.type === 'debugGetReport') {
       const state = await ensureTabState(message.tabId, null);
-      sendResponse({ ok: true, state, report: state ? PB.Report.summarize(state) : null, settings: await getSettings() });
+      const settings = await getSettings();
+      sendResponse({ ok: true, state, report: state ? applySettingsToSummary(PB.Report.summarize(state), settings) : null, settings });
       return;
     }
     sendResponse({ ok: false });

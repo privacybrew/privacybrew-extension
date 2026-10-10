@@ -57,7 +57,10 @@
   function renderTrackers(report) {
     const wrap = $('trackers');
     wrap.textContent = '';
-    if (report.blockedTrackerCount) {
+    const blockingOff = report.sitePaused || (report.settings && !report.settings.blockingEnabled);
+    if (blockingOff) {
+      text($('trackerSummary'), 'PrivacyBrew did not block trackers on this website.');
+    } else if (report.blockedTrackerCount) {
       text($('trackerSummary'), `PrivacyBrew blocked ${report.blockedTrackerCount} tracker ${plural(report.blockedTrackerCount, 'request')} from ${report.blockedCompanyCount} ${plural(report.blockedCompanyCount, 'company', 'companies')}.`);
     } else {
       text($('trackerSummary'), report.trackerCount ? `${report.trackerCount} known tracker ${plural(report.trackerCount, 'company', 'companies')} found.` : 'No known tracker companies found.');
@@ -89,13 +92,14 @@
   function render(report) {
     currentReport = report;
     text($('siteName'), report.siteDomain || 'This page');
-    const label = report.blockedTrackerCount ? `Blocked ${report.blockedTrackerCount} tracker ${plural(report.blockedTrackerCount, 'request')}` : (report.label || 'No report yet');
+    let label = report.label || 'No report yet';
+    if (report.sitePaused) label = 'Blocking is off for this website';
+    else if (report.settings && !report.settings.blockingEnabled) label = 'Blocking is off';
     text($('overall'), label);
     $('overall').classList.remove('low', 'some', 'high');
-    if (report.blockedTrackerCount) $('overall').classList.add('high');
-    else if (label === 'Little tracking found') $('overall').classList.add('low');
-    else if (label === 'Some tracking') $('overall').classList.add('some');
+    if (label === 'Little tracking found') $('overall').classList.add('low');
     else if (label === 'A lot of tracking') $('overall').classList.add('high');
+    else $('overall').classList.add('some');
     if (report.status === 'unsupported') {
       showMessage('PrivacyBrew cannot check this page.', 'Open a website to check it.');
     } else if (report.status === 'needReload') {

@@ -4,6 +4,7 @@
   const FONT_LIMIT = 20;
   const fontFamilies = new Set();
   const sent = new Set();
+  const sentDetails = [];
 
   function nativeLike(fn, name) {
     try {
@@ -34,7 +35,9 @@
     sent.add(key);
     try {
       // A page can forge this event. That can only add noise to its own report.
-      document.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { technique, origin: origin || scriptOrigin() } }));
+      const detail = { technique, origin: origin || scriptOrigin() };
+      sentDetails.push(detail);
+      document.dispatchEvent(new CustomEvent(EVENT_NAME, { detail }));
     } catch (_) {}
   }
 
@@ -52,6 +55,17 @@
       Object.defineProperty(obj, name, { value: wrapped, configurable: true, writable: true });
     } catch (_) {}
   }
+
+  function replay() {
+    try {
+      for (const detail of sentDetails) document.dispatchEvent(new CustomEvent(EVENT_NAME, { detail }));
+    } catch (_) {}
+  }
+
+  document.addEventListener('privacybrew:bridge-ready', replay);
+  setTimeout(replay, 50);
+  setTimeout(replay, 250);
+  setTimeout(replay, 1000);
 
   wrap(HTMLCanvasElement.prototype, 'toDataURL', (original) => function (...args) {
     try { if (isUsefulCanvas(this)) send('canvas'); } catch (_) {}

@@ -221,6 +221,14 @@ def storage_report(cdp, sw_session):
         time.sleep(0.25)
     raise RuntimeError('No tab state in storage: ' + json.dumps(last)[:500])
 
+
+def summarize_state(cdp, sw_session, tab_id):
+    expr = f"(async () => {{ const state = await getState({tab_id}); const settings = await getSettings(); return state ? applySettingsToSummary(PB.Report.summarize(state), settings) : null; }})()"
+    return cdp.call('Runtime.evaluate', {'expression': expr, 'awaitPromise': True, 'returnByValue': True}, sw_session)['result'].get('value') or {}
+
+def popup_text(cdp, session, selector):
+    return eval_value(cdp, session, f"document.querySelector('{selector}').textContent")
+
 def run_unit(cdp):
     target = cdp.call('Target.createTarget', {'url': f'http://site.test:{PORT}/unit/'})['targetId']
     session = attach_target(cdp, target)
@@ -256,7 +264,7 @@ def run_e2e(cdp):
     checks.append(('Meta not only fingerprinting', set(by_company.get('Meta', {}).get('categories', {}).keys()) != {'Fingerprinting'}))
     checks.append(('Microsoft advertising chip', 'Advertising' in by_company.get('Microsoft', {}).get('categories', {})))
     checks.append(('unknown domain', 'some-unknown-thirdparty.example' in state.get('unknownDomains', {})))
-    for technique in ['webgl', 'audio', 'fonts']:
+    for technique in ['canvas', 'webgl', 'audio', 'fonts']:
         checks.append((f'{technique} fingerprint', technique in fps))
     checks.append(('fingerprint source is page script', f'http://site.test:{PORT}/fp.js' in fp_origins))
     checks.append(('fingerprint source is not extension', not any(origin.startswith('chrome-extension://') for origin in fp_origins)))
@@ -284,13 +292,20 @@ def run_e2e(cdp):
     navigate_and_wait(cdp, session, f'http://site.test:{PORT}/tracker.html')
     paused_vars = eval_value(cdp, session, '({ga: window.__pbGaRan, ad: window.__pbDoubleClickRan, meta: window.__pbMetaRan, bing: window.__pbBingRan})')
     checks.append(('paused site allows trackers', all(paused_vars.values())))
+    _, paused_state = storage_report(cdp, sw_session)
+    paused_report = summarize_state(cdp, sw_session, tab_id)
+    checks.append(('paused blocked count is zero', paused_report.get('blockedTrackerCount') == 0))
+    checks.append(('paused rows are allowed', all(t.get('status') == 'Allowed' for t in paused_report.get('trackers', []))))
     paused_popup = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
     paused_popup_session = attach_target(cdp, paused_popup)
     cdp.call('Page.enable', sessionId=paused_popup_session)
     cdp.call('Emulation.setDeviceMetricsOverride', {'width': 360, 'height': 760, 'deviceScaleFactor': 1, 'mobile': False}, paused_popup_session)
     cdp.call('Page.navigate', {'url': f'chrome-extension://{ext_id}/popup.html?tabId={tab_id}'}, paused_popup_session)
     wait_expr(cdp, paused_popup_session, 'document.readyState === \"complete\"', 10)
-    time.sleep(0.5)
+    wait_expr(cdp, paused_popup_session, "document.querySelector('#overall').textContent !== 'Loading report'", 10)
+    time.sleep(0.2)
+    checks.append(('paused header text', popup_text(cdp, paused_popup_session, '#overall') == 'Blocking is off for this website'))
+    checks.append(('paused summary text', popup_text(cdp, paused_popup_session, '#trackerSummary') == 'PrivacyBrew did not block trackers on this website.'))
     paused_shot = cdp.call('Page.captureScreenshot', {'format': 'png', 'captureBeyondViewport': True}, paused_popup_session)['data']
     paused_shot_path = ART / 'pb-ext-popup-paused.png'
     paused_shot_path.write_bytes(base64.b64decode(paused_shot))
@@ -299,6 +314,15 @@ def run_e2e(cdp):
     navigate_and_wait(cdp, session, f'http://site.test:{PORT}/tracker.html')
     global_off_vars = eval_value(cdp, session, '({ga: window.__pbGaRan, ad: window.__pbDoubleClickRan, meta: window.__pbMetaRan, bing: window.__pbBingRan})')
     checks.append(('global switch off allows trackers', all(global_off_vars.values())))
+    global_off_report = summarize_state(cdp, sw_session, tab_id)
+    checks.append(('global off blocked count is zero', global_off_report.get('blockedTrackerCount') == 0))
+    checks.append(('global off rows are allowed', all(t.get('status') == 'Allowed' for t in global_off_report.get('trackers', []))))
+    global_popup = cdp.call('Target.createTarget', {'url': f'chrome-extension://{ext_id}/popup.html?tabId={tab_id}'})['targetId']
+    global_popup_session = attach_target(cdp, global_popup)
+    wait_expr(cdp, global_popup_session, 'document.readyState === \"complete\"', 10)
+    wait_expr(cdp, global_popup_session, "document.querySelector('#overall').textContent !== 'Loading report'", 10)
+    checks.append(('global off header text', popup_text(cdp, global_popup_session, '#overall') == 'Blocking is off'))
+    checks.append(('global off summary text', popup_text(cdp, global_popup_session, '#trackerSummary') == 'PrivacyBrew did not block trackers on this website.'))
     gpc_on_seen = any(item['host'] == 'site.test' and item['secGpc'] == '1' for item in HEADER_LOG)
     checks.append(('GPC header sent when on', gpc_on_seen))
     cdp.call('Runtime.evaluate', {'expression': "setGpc(false)", 'awaitPromise': True}, sw_session)
