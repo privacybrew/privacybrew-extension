@@ -21,8 +21,7 @@
     "webNavigation",
     "storage",
     "declarativeNetRequest",
-    "scripting",
-    "declarativeNetRequestFeedback"
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -112,5 +111,15 @@
         "path": "rules/gpc_headers.json"
       }
     ]
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "data/easylist_generic.css"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
 }

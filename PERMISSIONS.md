@@ -16,7 +16,7 @@ PrivacyBrew stores per-tab reports in `chrome.storage.session`. It stores blocki
 
 ## `declarativeNetRequest`
 
-PrivacyBrew blocks known tracker and ad requests with static rules. It also sends the `Sec-GPC: 1` header when the GPC setting is on.
+PrivacyBrew blocks known tracker and ad requests with static rules. It also sends the `Sec-GPC: 1` header when the GPC setting is on. PrivacyBrew counts blocked ads with `webRequest.onErrorOccurred` and a local EasyList index, so it does not need `declarativeNetRequestFeedback`.
 
 ## `scripting`
 
@@ -29,7 +29,3 @@ PrivacyBrew must observe requests on any website the user opens. This permission
 ## No `tabs` permission
 
 The extension does not request the `tabs` permission. It uses the active tab ID from the popup and navigation events in the service worker.
-
-## `declarativeNetRequestFeedback`
-
-PrivacyBrew uses matched-rule events to count ad requests blocked by EasyList. This keeps ad counts separate from tracker counts.

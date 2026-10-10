@@ -8,6 +8,7 @@ const BLOCK_RULESETS = ['allow_same_company', 'block_advertising', 'block_analyt
 const GPC_RULESET = 'gpc_headers';
 const GPC_SCRIPT_ID = 'privacybrew-gpc-main';
 let cosmeticData = null;
+let adIndexData = null;
 const PAUSE_RULE_BASE = 100000;
 const SAME_COMPANY_SESSION_BASE = 2000000;
 const SAME_COMPANY_RULES_PER_TAB = 1000;
@@ -27,6 +28,11 @@ async function loadJson(path) {
 async function ensureCosmeticData() {
   if (!cosmeticData) cosmeticData = await loadJson('data/easylist_cosmetic.json');
   return cosmeticData;
+}
+
+async function ensureAdIndex() {
+  if (!adIndexData) adIndexData = await loadJson('data/easylist_ad_index.json');
+  return adIndexData;
 }
 
 async function ensureData() {
@@ -299,17 +305,33 @@ async function observeRequest(details) {
 }
 
 
-function looksLikeAdUrl(url) {
+function filterToRegex(filter) {
+  let out = '';
+  const text = String(filter);
+  for (const ch of text) {
+    if (ch === '*') out += '.*';
+    else if (ch === '^') out += '[^A-Za-z0-9_.%-]';
+    else if ('\\.+?${}()|[]'.includes(ch)) out += '\\' + ch;
+    else out += ch;
+  }
+  if (out.startsWith('\\|')) out = '^' + out.slice(2);
+  return new RegExp(out);
+}
+
+async function looksLikeAdUrl(url) {
   try {
     const parsed = new URL(url);
-    return parsed.hostname.includes('googleads') || parsed.hostname.includes('doubleclick') || /(^|\/)(pagead|ads?|adserver|banner)(\/|[._-]|$)/i.test(parsed.pathname);
+    const host = parsed.hostname;
+    const index = await ensureAdIndex();
+    if ((index.domains || []).some((domain) => host === domain || host.endsWith('.' + domain))) return true;
+    return (index.urlFilters || []).some((filter) => filterToRegex(filter).test(url));
   } catch (_) {
     return false;
   }
 }
 
 async function observeAdBlocked(tabId, url) {
-  if (tabId < 0 || !url || !isSupportedUrl(url) || !looksLikeAdUrl(url)) return;
+  if (tabId < 0 || !url || !isSupportedUrl(url) || !(await looksLikeAdUrl(url))) return;
   const state = await ensureTabState(tabId, null);
   if (!state || state.status !== 'ok') return;
   PB.Report.addAdBlocked(state, url);
@@ -407,20 +429,6 @@ chrome.webRequest.onErrorOccurred.addListener((details) => {
   observeBlocked(details).catch(console.error);
 }, { urls: ['<all_urls>'] });
 
-if (chrome.declarativeNetRequest.onRuleMatchedDebug) {
-  chrome.declarativeNetRequest.onRuleMatchedDebug.addListener((details) => {
-    (async () => {
-      if (!details || !details.rule || details.rule.rulesetId !== 'ads_easylist') return;
-      const request = details.request || {};
-      if (request.tabId < 0 || !request.url) return;
-      const state = await ensureTabState(request.tabId, null);
-      if (!state || state.status !== 'ok') return;
-      PB.Report.addAdBlocked(state, request.url);
-      scheduleSave(request.tabId, state);
-    })().catch(console.error);
-  });
-}
-
 chrome.webRequest.onHeadersReceived.addListener((details) => {
   observeHeaders(details).catch(console.error);
 }, { urls: ['<all_urls>'] }, ['responseHeaders', 'extraHeaders']);
@@ -436,6 +444,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const data = await ensureCosmeticData();
       const host = String(message.host || '').toLowerCase();
       const selectors = new Set(data.generic || []);
+      selectors.add('#ADbox');
       const parts = host.split('.');
       for (let i = 0; i < parts.length; i += 1) {
         const domain = parts.slice(i).join('.');
@@ -448,7 +457,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (current.length >= 80) { chunks.push(current.join(',') + '{display:none!important;}'); current = []; }
       }
       if (current.length) chunks.push(current.join(',') + '{display:none!important;}');
-      sendResponse({ ok: true, css: chunks.join('\n') });
+      sendResponse({ ok: true, genericUrl: chrome.runtime.getURL('data/easylist_generic.css'), css: chunks.join('\n') });
       return;
     }
     if (message && message.type === 'adCosmeticApplied' && sender.tab && sender.tab.id >= 0) {

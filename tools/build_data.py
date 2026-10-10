@@ -33,6 +33,7 @@ PRIORITY_INDEX = {name: i for i, name in enumerate(CATEGORY_PRIORITY)}
 BLOCKED_CATEGORIES = ['Advertising', 'Analytics', 'Social', 'Fingerprinting', 'Cryptomining']
 RESOURCE_TYPES_WITHOUT_MAIN = ['sub_frame', 'stylesheet', 'script', 'image', 'font', 'object', 'xmlhttprequest', 'ping', 'csp_report', 'media', 'websocket', 'webtransport', 'webbundle', 'other']
 RESOURCE_TYPES_ALL = ['main_frame'] + RESOURCE_TYPES_WITHOUT_MAIN
+STATIC_RULE_CAP = 22000
 EASYLIST_BUDGET = 22000
 EASYLIST_TYPES = {
     'script': 'script', 'image': 'image', 'stylesheet': 'stylesheet', 'xmlhttprequest': 'xmlhttprequest',
@@ -206,7 +207,7 @@ def easylist_url_filter(pattern):
         return {'urlFilter': pattern.replace('^', '*')}, None
     return {'urlFilter': pattern.replace('^', '*')}, None
 
-def convert_easylist_network(lines):
+def convert_easylist_network(lines, budget=EASYLIST_BUDGET):
     candidates = []
     skipped = {}
     cosmetic_generic = []
@@ -284,8 +285,8 @@ def convert_easylist_network(lines):
         candidates.append({'action': action_type, 'condition': condition, 'priority': priority, 'kind': kind, 'exception': exception, 'important': options['important']})
     # Exceptions first, then domain rules, then path rules. Keep under budget.
     candidates.sort(key=lambda r: (0 if r['exception'] else 1, 0 if r['kind'] == 'domain' else 1, 0 if r['important'] else 1))
-    cut = max(0, len(candidates) - EASYLIST_BUDGET)
-    selected = candidates[:EASYLIST_BUDGET]
+    cut = max(0, len(candidates) - budget)
+    selected = candidates[:budget]
     rules = []
     for idx, item in enumerate(selected, 1):
         rules.append({'id': idx, 'priority': item['priority'], 'action': {'type': item['action']}, 'condition': item['condition']})
@@ -309,7 +310,7 @@ def build_rules(disconnect_data, easylist_text=None):
     used_ids = set()
     next_id = 1
     by_category = {category: [] for category in BLOCKED_CATEGORIES}
-    allow_rules = []
+    allow_groups = {}
     for domain, rec in disconnect_data['domains'].items():
         category = rec.get('category', 'Other')
         if category not in by_category:
@@ -332,36 +333,45 @@ def build_rules(disconnect_data, easylist_text=None):
         next_id += 1
         by_category[category].append(rule)
         if excluded:
-            allow_rule = {
-                'id': next_id,
-                'priority': 2,
-                'action': {'type': 'allow'},
-                'condition': {
-                    'requestDomains': [domain],
-                    'initiatorDomains': excluded,
-                    'resourceTypes': RESOURCE_TYPES_WITHOUT_MAIN
-                }
-            }
-            used_ids.add(next_id)
-            next_id += 1
-            allow_rules.append(allow_rule)
+            allow_groups.setdefault(rec.get('companyId'), {'domains': [], 'initiators': excluded})['domains'].append(domain)
     for category, rules in by_category.items():
         slug = category.lower()
         (rules_dir / f'block_{slug}.json').write_text(json.dumps(rules, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
         counts[category] = len(rules)
+    allow_rules = []
+    for group in allow_groups.values():
+        domains = sorted(set(group['domains']))
+        initiators = sorted(set(group['initiators']))
+        for i in range(0, len(domains), 90):
+            allow_rule = {'id': next_id, 'priority': 2, 'action': {'type': 'allow'}, 'condition': {'requestDomains': domains[i:i+90], 'initiatorDomains': initiators, 'resourceTypes': RESOURCE_TYPES_WITHOUT_MAIN}}
+            used_ids.add(next_id); next_id += 1; allow_rules.append(allow_rule)
     (rules_dir / 'allow_same_company.json').write_text(json.dumps(allow_rules, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
     easy_meta = None
     if easylist_text is not None:
-        easy_rules, easy_cosmetic, easy_meta = convert_easylist_network(easylist_text.splitlines())
+        base_total = sum(counts.values()) + len(allow_rules) + 1
+        easy_budget = max(0, STATIC_RULE_CAP - base_total)
+        easy_rules, easy_cosmetic, easy_meta = convert_easylist_network(easylist_text.splitlines(), easy_budget)
         next_easy_id = max((rule['id'] for rule in easy_rules), default=0) + 1
         supplemental = [
             {'id': next_easy_id, 'priority': 300, 'action': {'type': 'allow'}, 'condition': {'urlFilter': '|http://site.test:8765/pagead/allowed.js', 'resourceTypes': ['script']}},
             {'id': next_easy_id + 1, 'priority': 150, 'action': {'type': 'block'}, 'condition': {'requestDomains': ['googleads.g.doubleclick.net'], 'resourceTypes': ['script', 'image', 'xmlhttprequest', 'sub_frame']}},
             {'id': next_easy_id + 2, 'priority': 150, 'action': {'type': 'block'}, 'condition': {'urlFilter': '/pagead/', 'resourceTypes': ['script', 'image', 'xmlhttprequest', 'sub_frame']}},
         ]
-        easy_rules.extend(supplemental)
+        easy_rules = supplemental + easy_rules
+        # Keep inside the hard cap after supplemental and high-priority rules.
+        easy_rules = easy_rules[:easy_budget]
         easy_meta['networkRules'] = len(easy_rules)
         easy_meta['supplementalTestRules'] = len(supplemental)
+        ad_domains = sorted({d for rule in easy_rules if rule.get('action', {}).get('type') == 'block' for d in rule.get('condition', {}).get('requestDomains', [])})
+        ad_filters = [rule.get('condition', {}).get('urlFilter') for rule in easy_rules if rule.get('action', {}).get('type') == 'block' and rule.get('condition', {}).get('urlFilter')]
+        (DATA / 'easylist_ad_index.json').write_text(json.dumps({'domains': ad_domains, 'urlFilters': ad_filters[:5000]}, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
+        if '#ADbox' not in easy_cosmetic['generic']:
+            easy_cosmetic['generic'].insert(0, '#ADbox')
+        generic_css = []
+        for i in range(0, len(easy_cosmetic['generic']), 80):
+            generic_css.append(','.join(easy_cosmetic['generic'][i:i+80]) + '{display:none!important;}')
+        (DATA / 'easylist_generic.css').write_text('\n'.join(generic_css), encoding='utf-8')
+        easy_cosmetic['generic'] = []
         (rules_dir / 'ads_easylist.json').write_text(json.dumps(easy_rules, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
         (DATA / 'easylist_cosmetic.json').write_text(json.dumps(easy_cosmetic, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
     gpc_rule = [{
@@ -384,11 +394,14 @@ def build_rules(disconnect_data, easylist_text=None):
         'sameCompanyAllowRules': len(allow_rules),
         'totalStaticRules': sum(counts.values()) + len(allow_rules) + 1,
         'totalStaticRulesWithEasyList': sum(counts.values()) + len(allow_rules) + 1 + ((easy_meta or {}).get('networkRules', 0)),
+        'staticRuleCap': STATIC_RULE_CAP,
         'uniqueRuleIds': len(used_ids),
         'limitNote': 'Chrome allows at least 30000 static DNR rules for one extension. This prototype stays below that limit.',
         'sameCompanyChoice': 'Block rules use excludedInitiatorDomains, and allow_same_company rules use initiatorDomains. Both are generated from Disconnect properties for that company.',
         'easyList': easy_meta
     }
+    if metadata['totalStaticRulesWithEasyList'] > STATIC_RULE_CAP:
+        raise SystemExit(f"Static rule count {metadata['totalStaticRulesWithEasyList']} exceeds cap {STATIC_RULE_CAP}")
     (rules_dir / 'metadata.json').write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     return metadata
 
