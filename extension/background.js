@@ -362,7 +362,6 @@ chrome.runtime.onStartup.addListener(() => {
   applySettings().catch(console.error);
 });
 chrome.webNavigation.onCommitted.addListener(resetOnTopFrame);
-chrome.webNavigation.onHistoryStateUpdated.addListener(resetOnTopFrame);
 
 chrome.webRequest.onBeforeRequest.addListener((details) => {
   observeRequest(details).catch(console.error);

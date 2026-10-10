@@ -45,6 +45,14 @@ class TestHandler(http.server.BaseHTTPRequestHandler):
 <script src="http://site.test:{PORT}/fp.js"></script>
 <h1>Tracker page</h1>'''
             return self.end(body)
+        if host == 'site.test' and path == '/spa.html':
+            body = f'''<!doctype html><title>SPA page</title>
+<script src="http://www.google-analytics.com:{PORT}/ga.js"></script>
+<script>setTimeout(() => history.pushState({{}}, '', '/spa-state'), 100); setTimeout(() => history.replaceState({{}}, '', '/spa-replace'), 200);</script>
+<h1>SPA page</h1>'''
+            return self.end(body)
+        if host == 'site.test' and path == '/newpage.html':
+            return self.end('<!doctype html><title>New page</title><h1>New page</h1>')
         if host == 'clean.test' and path in ['/', '/clean.html']:
             return self.end('<!doctype html><title>Clean page</title><h1>Clean page</h1>')
         if host == 'youtube.com' and path in ['/', '/property.html']:
@@ -328,6 +336,15 @@ def run_e2e(cdp):
     checks.append(('badge text', badge == str(len(blocked_companies))))
     checks.append(('report has blocked status', any(v.get('status') == 'Blocked' for v in report.get('trackers', []))))
     checks.append(('no domain overlap without loaded request', all((set(v.get('blockedDomains', [])) & set(v.get('allowedDomains', []))) <= {d for d in v.get('allowedDomains', []) if v.get('allowedRequestHashes')} for v in report.get('trackers', []))))
+    spa_target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
+    spa_session = attach_target(cdp, spa_target)
+    navigate_and_wait(cdp, spa_session, f'http://site.test:{PORT}/spa.html')
+    spa_tab_id, _ = storage_report(cdp, sw_session)
+    spa_report = summarize_state(cdp, sw_session, spa_tab_id)
+    checks.append(('SPA history keeps tracker counts', spa_report.get('trackerRequestCount', 0) >= 1 and spa_report.get('blockedTrackerCount', 0) >= 1))
+    navigate_and_wait(cdp, spa_session, f'http://site.test:{PORT}/newpage.html')
+    newpage_report = summarize_state(cdp, sw_session, spa_tab_id)
+    checks.append(('new document navigation resets tracker counts', newpage_report.get('trackerRequestCount', 0) == 0))
     prop_target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
     prop_session = attach_target(cdp, prop_target)
     navigate_and_wait(cdp, prop_session, f'http://youtube.com:{PORT}/property.html')
