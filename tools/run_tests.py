@@ -324,9 +324,10 @@ def run_e2e(cdp):
         checks.append((f'{technique} fingerprint', technique in fps))
     checks.append(('fingerprint source is page script', f'http://site.test:{PORT}/fp.js' in fp_origins))
     checks.append(('fingerprint source is not extension', not any(origin.startswith('chrome-extension://') for origin in fp_origins)))
-    blocked_companies = [v for v in state.get('trackers', {}).values() if v.get('blockedDomains')]
+    blocked_companies = [v for v in report.get('trackers', []) if v.get('blockedRequestHashes')]
     checks.append(('badge text', badge == str(len(blocked_companies))))
-    checks.append(('report has blocked status', any(v.get('blockedDomains') for v in state.get('trackers', {}).values())))
+    checks.append(('report has blocked status', any(v.get('status') == 'Blocked' for v in report.get('trackers', []))))
+    checks.append(('no domain overlap without loaded request', all((set(v.get('blockedDomains', [])) & set(v.get('allowedDomains', []))) <= {d for d in v.get('allowedDomains', []) if v.get('allowedRequestHashes')} for v in report.get('trackers', []))))
     prop_target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
     prop_session = attach_target(cdp, prop_target)
     navigate_and_wait(cdp, prop_session, f'http://youtube.com:{PORT}/property.html')

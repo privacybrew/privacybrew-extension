@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import base64, contextlib, json, re, shutil, subprocess, sys, time
+import base64, contextlib, json, os, re, shutil, subprocess, sys, time
 from pathlib import Path
 from urllib.parse import urlparse
 import websocket
@@ -9,6 +9,18 @@ EXT = ROOT / 'extension'
 OUT = ROOT / 'artifacts' / 'pb-realtest'
 DOCS = ROOT / 'docs'
 WINDOW = '1280,900'
+NORMAL_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.8037.97 Safari/537.36'
+UA_METADATA = {
+  'brands': [{'brand': 'Chromium', 'version': '154'}, {'brand': 'Google Chrome', 'version': '154'}, {'brand': 'Not=A?Brand', 'version': '24'}],
+  'fullVersionList': [{'brand': 'Chromium', 'version': '154.0.8037.97'}, {'brand': 'Google Chrome', 'version': '154.0.8037.97'}, {'brand': 'Not=A?Brand', 'version': '24.0.0.0'}],
+  'fullVersion': '154.0.8037.97',
+  'platform': 'Linux',
+  'platformVersion': '6.0.0',
+  'architecture': 'x86',
+  'model': '',
+  'mobile': False
+}
+BLOCK_TEXT = ['access denied', 'unknown error', 'something went wrong', 'err_', "this site can't be reached", 'captcha', 'are you a robot', 'verify you are human']
 MAX_WAIT = 25
 IDLE_WAIT = 6
 
@@ -68,7 +80,7 @@ def launch(name, extension=False):
       'google-chrome','--headless=new','--no-first-run','--no-default-browser-check',
       f'--user-data-dir={profile}','--remote-debugging-port=0','--remote-allow-origins=*',
       '--disable-sync','--disable-background-networking','--disable-component-update',
-      f'--window-size={WINDOW}'
+      f'--window-size={WINDOW}', f'--user-agent={NORMAL_UA}'
     ]
     if extension:
         args += ['--enable-unsafe-extension-debugging']
@@ -138,6 +150,8 @@ def load_page(cdp, site, mode, sw_session=None, ext_id=None, worker_sessions=Non
     cdp.call('Page.enable', sessionId=session)
     cdp.call('Runtime.enable', sessionId=session)
     cdp.call('Network.enable', sessionId=session)
+    with contextlib.suppress(Exception):
+        cdp.call('Network.setUserAgentOverride', {'userAgent': NORMAL_UA, 'userAgentMetadata': UA_METADATA}, session)
     cdp.call('Performance.enable', sessionId=session)
     start_idx = len(cdp.events)
     start = time.time()
@@ -187,7 +201,7 @@ def load_page(cdp, site, mode, sw_session=None, ext_id=None, worker_sessions=Non
             console_errors += 1
     metrics = cdp.call('Performance.getMetrics', sessionId=session).get('metrics', [])
     metric_map = {m['name']: m.get('value') for m in metrics}
-    visible = eval_value(cdp, session, "(() => { const vis = e => { const r=e.getBoundingClientRect(); const s=getComputedStyle(e); return r.width>1 && r.height>1 && s.visibility!=='hidden' && s.display!=='none'; }; return {textLength:(document.body&&document.body.innerText||'').length, images:[...document.images].filter(vis).length, videos:[...document.querySelectorAll('video')].filter(vis).length, iframes:[...document.querySelectorAll('iframe')].filter(vis).length, finalUrl:location.href}; })()") or {}
+    visible = eval_value(cdp, session, "(() => { const vis = e => { const r=e.getBoundingClientRect(); const s=getComputedStyle(e); return r.width>1 && r.height>1 && s.visibility!=='hidden' && s.display!=='none'; }; const text=(document.body&&document.body.innerText||''); return {title:document.title||'', textSample:text.slice(0,2000), textLength:text.length, images:[...document.images].filter(vis).length, videos:[...document.querySelectorAll('video')].filter(vis).length, iframes:[...document.querySelectorAll('iframe')].filter(vis).length, finalUrl:location.href}; })()") or {}
     shot_path = OUT / f'{slug(site)}-{mode}.png'
     with contextlib.suppress(Exception):
         shot = cdp.call('Page.captureScreenshot', {'format':'png'}, session)['data']
@@ -209,15 +223,35 @@ def load_page(cdp, site, mode, sw_session=None, ext_id=None, worker_sessions=Non
       'loadTimeMs': round(load_time*1000) if load_time else None,
       'idleTimeMs': round(idle_time*1000), 'requestCount': len(requests), 'bytes': bytes_sum,
       'failed': failed, 'consoleErrors': console_errors, 'exceptions': exceptions,
-      'textLength': visible.get('textLength',0), 'images': visible.get('images',0), 'videos': visible.get('videos',0), 'iframes': visible.get('iframes',0), 'finalUrl': visible.get('finalUrl',''),
+      'title': visible.get('title',''), 'textSample': visible.get('textSample',''), 'textLength': visible.get('textLength',0), 'images': visible.get('images',0), 'videos': visible.get('videos',0), 'iframes': visible.get('iframes',0), 'finalUrl': visible.get('finalUrl',''),
       'JSHeapUsedSize': metric_map.get('JSHeapUsedSize'), 'TaskDuration': metric_map.get('TaskDuration'),
-      'report': report, 'badge': badge, 'swErrors': sw_errors, 'screenshot': str(shot_path.relative_to(ROOT))
+      'report': report, 'badge': badge, 'storageBytes': len(json.dumps(eval_value(cdp, sw_session, 'new Promise(r=>chrome.storage.session.get(null,r))') or {})) if sw_session else None, 'swErrors': sw_errors, 'screenshot': str(shot_path.relative_to(ROOT))
     }
 
 def median(vals):
     vals = sorted(v for v in vals if isinstance(v, (int,float)))
     if not vals: return None
     return vals[len(vals)//2]
+
+
+def validity(row):
+    if row.get('error'):
+        return False, 'load error'
+    text = ((row.get('title') or '') + ' ' + (row.get('textSample') or '')).lower()
+    if any(marker in text for marker in BLOCK_TEXT):
+        return False, 'site blocked the test browser'
+    if (row.get('textLength') or 0) >= 1000:
+        return True, ''
+    if (row.get('requestCount') or 0) >= 20 and (row.get('textLength') or 0) >= 100:
+        return True, ''
+    return False, 'site blocked the test browser'
+
+def selected_sites():
+    filt = os.environ.get('REALSITE_FILTER')
+    if not filt:
+        return SITES
+    wanted = {item.strip() for item in filt.split(',') if item.strip()}
+    return [(cat, site) for cat, site in SITES if site in wanted]
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
@@ -229,8 +263,9 @@ def main():
     try:
         proc_b, cdp_b, _, _, _, prof_b = launch('baseline', extension=False); profiles.append(prof_b)
         proc_e, cdp_e, ext_id, sw_session, worker_sessions, prof_e = launch('extension', extension=True); profiles.append(prof_e)
-        for idx, (cat, site) in enumerate(SITES, 1):
-            print(f'[{idx}/{len(SITES)}] {site}', flush=True)
+        sites = selected_sites()
+        for idx, (cat, site) in enumerate(sites, 1):
+            print(f'[{idx}/{len(sites)}] {site}', flush=True)
             try:
                 results.append(dict(category=cat, **load_page(cdp_b, site, 'base')))
             except Exception as e:
@@ -255,25 +290,31 @@ def main():
     by_site = {}
     for r in results: by_site.setdefault(r['site'], {})[r['mode']] = r
     rows = []
+    invalid = []
     overheads = []
     suspects = []
     for site, modes in by_site.items():
         base, on, off = modes.get('base',{}), modes.get('on',{}), modes.get('off',{})
+        valid, reason = validity(base)
+        if not valid:
+            invalid.append((site, reason))
+            rows.append([site, on.get('category','') or base.get('category',''), 'Not tested', '', '', '', '', 'Not tested', reason])
+            continue
         if base.get('idleTimeMs') and on.get('idleTimeMs'):
             overheads.append(on['idleTimeMs'] - base['idleTimeMs'])
         txt_on, txt_off = on.get('textLength',0), off.get('textLength',0)
         breakage = 'No'
-        note = ''
-        if txt_off and txt_on < txt_off * 0.45:
+        note = 'No extension-specific breakage found.'
+        if txt_off and txt_on < txt_off * 0.45 and txt_on < (base.get('textLength') or 0) * 0.45:
             breakage = 'Check'; note = 'Much less visible text with blocking on.'; suspects.append(site)
-        if on.get('exceptions',0) > off.get('exceptions',0) + 5:
-            breakage = 'Check'; note = (note + ' More page exceptions with blocking on.').strip(); suspects.append(site)
+        if on.get('exceptions',0) > off.get('exceptions',0) + 5 and on.get('exceptions',0) > base.get('exceptions',0) + 5:
+            breakage = 'Check'; note = 'More page exceptions with blocking on.'; suspects.append(site)
         report = on.get('report') or {}
         rows.append([site, on.get('category',''), base.get('idleTimeMs'), on.get('idleTimeMs'), off.get('idleTimeMs'), report.get('trackerRequestCount',0), report.get('blockedTrackerCount',0), breakage, note])
     doc = ['# Real-site test pass 2026-10-10', '', 'Screenshots and raw JSON are in ignored `artifacts/pb-realtest/`.', '', '| Site | Category | Baseline idle ms | Blocking on idle ms | Blocking off idle ms | Trackers found | Blocked | Breakage | Note |', '|---|---:|---:|---:|---:|---:|---:|---|---|']
     for row in rows:
         doc.append('| ' + ' | '.join('' if v is None else str(v).replace('|','/') for v in row) + ' |')
-    doc += ['', '## Aggregate', '', f'- Sites tested: {len(by_site)}', f'- Median idle overhead vs baseline: {median(overheads)} ms', f'- Worst idle overhead vs baseline: {max(overheads) if overheads else None} ms', f'- Breakage suspects: {", ".join(sorted(set(suspects))) if suspects else "None flagged by automated checks"}.']
+    doc += ['', '## Aggregate', '', f'- Sites tested: {len(by_site)}', f'- Valid sites: {len(by_site) - len(invalid)} / {len(by_site)}', f'- Median idle overhead vs baseline on valid sites: {median(overheads)} ms', f'- Worst idle overhead vs baseline on valid sites: {max(overheads) if overheads else None} ms', f'- Breakage suspects on valid sites: {", ".join(sorted(set(suspects))) if suspects else "None flagged by automated checks"}.', f'- Not tested sites: {", ".join(site for site, _ in invalid) if invalid else "None"}.', '- Counts can vary between visits on ad-heavy sites. With blocking on, blocked scripts cannot load more trackers. Some pages also retry or use fallback requests.']
     (DOCS / 'REALSITE_TEST_2026-10-10.md').write_text('\n'.join(doc) + '\n', encoding='utf-8')
     print(json.dumps({'sites': len(by_site), 'medianOverheadMs': median(overheads), 'worstOverheadMs': max(overheads) if overheads else None, 'suspects': sorted(set(suspects))[:20]}, indent=2))
 

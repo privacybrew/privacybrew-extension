@@ -53,6 +53,8 @@ You can pause blocking for one website. You can also turn blocking off for all w
 
 The toolbar badge shows the number of blocked tracker companies on the current page.
 
+PrivacyBrew counts distinct tracker requests by origin and path. It removes query strings and fragments before storage. This keeps tracking IDs out of local reports and reduces retry noise.
+
 ## GPC
 
 The GPC setting is on by default. It sends `Sec-GPC: 1` with browser requests. It also sets `navigator.globalPrivacyControl` to true in page scripts.

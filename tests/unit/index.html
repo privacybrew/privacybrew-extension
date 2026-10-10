@@ -97,6 +97,33 @@
     eq(summary.trackerRequestCount, summary.blockedTrackerCount + summary.allowedTrackerCount, 'paused invariant');
   });
 
+
+  test('Tracker storage removes query strings', () => {
+    const s = PB.Report.emptyState(1, 'https://example.com', 'example.com');
+    PB.Report.addTracker(s, disconnect.find('doubleclick.net'), 'doubleclick.net', 'blocked', 'https://doubleclick.net/ad.js?dpuuid=secret#part');
+    const raw = JSON.stringify(s);
+    ok(!raw.includes('?'), 'no query string stored');
+    ok(!raw.includes('#'), 'no fragment stored');
+    ok(!raw.includes('secret'), 'no query value stored');
+  });
+  test('Tracker allowed domain needs a loaded request', () => {
+    const s = PB.Report.emptyState(1, 'https://example.com', 'example.com');
+    PB.Report.addTracker(s, disconnect.find('doubleclick.net'), 'doubleclick.net', 'blocked', 'https://doubleclick.net/ad.js?one=1');
+    const tracker = PB.Report.summarize(s).trackers[0];
+    ok(tracker.blockedDomains.includes('doubleclick.net'), 'blocked domain');
+    ok(!tracker.allowedDomains.includes('doubleclick.net'), 'not allowed without load');
+  });
+  test('Tracker domain can be both only with blocked and loaded requests', () => {
+    const s = PB.Report.emptyState(1, 'https://example.com', 'example.com');
+    PB.Report.addTracker(s, disconnect.find('doubleclick.net'), 'doubleclick.net', 'blocked', 'https://doubleclick.net/ad.js');
+    PB.Report.addTracker(s, disconnect.find('doubleclick.net'), 'doubleclick.net', 'allowed', 'https://doubleclick.net/loaded.js');
+    const tracker = PB.Report.summarize(s).trackers[0];
+    ok(tracker.blockedDomains.includes('doubleclick.net'), 'blocked domain');
+    ok(tracker.allowedDomains.includes('doubleclick.net'), 'allowed domain');
+    eq(tracker.blockedRequestHashes.length, 1, 'one blocked');
+    eq(tracker.allowedRequestHashes.length, 1, 'one allowed');
+  });
+
   test('Report keeps multiple company categories', () => {
     const s = PB.Report.emptyState(1, 'https://example.com', 'example.com');
     PB.Report.addTracker(s, disconnect.find('google-analytics.com'), 'google-analytics.com', 'allowed', 'https://google-analytics.com/a.js');

@@ -277,7 +277,14 @@ async function observeResourceUrl(tabId, url, status) {
 }
 
 async function observeRequest(details) {
-  await observeTrackerUrl(details.tabId, details.url, 'allowed');
+  if (!details.url || !isSupportedUrl(details.url) || details.tabId < 0) return;
+  const state = await ensureTabState(details.tabId, null);
+  if (!state || state.status !== 'ok' || !state.siteDomain) return;
+  const requestDomain = psl.registrableDomain(new URL(details.url).hostname);
+  if (requestDomain && requestDomain !== state.siteDomain && !disconnect.find(new URL(details.url).hostname)) {
+    PB.Report.addUnknown(state, requestDomain);
+    scheduleSave(details.tabId, state);
+  }
 }
 
 async function observeBlocked(details) {
@@ -287,7 +294,9 @@ async function observeBlocked(details) {
 }
 
 async function observeHeaders(details) {
-  if (details.tabId < 0 || !hasSetCookie(details.responseHeaders) || !details.url || !isSupportedUrl(details.url)) return;
+  if (details.tabId < 0 || !details.url || !isSupportedUrl(details.url)) return;
+  await observeTrackerUrl(details.tabId, details.url, 'allowed');
+  if (!hasSetCookie(details.responseHeaders)) return;
   const state = await ensureTabState(details.tabId, null);
   if (!state || state.status !== 'ok' || !state.siteDomain) return;
   const responseHost = psl.cleanHost(new URL(details.url).hostname);
@@ -319,9 +328,9 @@ function applySettingsToSummary(summary, settings) {
     summary.trackers = (summary.trackers || []).map((tracker) => Object.assign({}, tracker, {
       status: 'Allowed',
       allowedDomains: Array.from(new Set([...(tracker.allowedDomains || []), ...(tracker.blockedDomains || [])])).sort(),
-      allowedRequestUrls: Array.from(new Set([...(tracker.allowedRequestUrls || []), ...(tracker.blockedRequestUrls || [])])).sort(),
+      allowedRequestHashes: Array.from(new Set([...(tracker.allowedRequestHashes || []), ...(tracker.blockedRequestHashes || [])])).sort(),
       blockedDomains: [],
-      blockedRequestUrls: []
+      blockedRequestHashes: []
     }));
   }
   return summary;
