@@ -103,25 +103,39 @@ async function applyGpcScript(enabled) {
   const registered = await chrome.scripting.getRegisteredContentScripts({ ids: [GPC_SCRIPT_ID] });
   const isRegistered = registered.length > 0;
   if (enabled && !isRegistered) {
-    await chrome.scripting.registerContentScripts([{
-      id: GPC_SCRIPT_ID,
-      matches: ['<all_urls>'],
-      js: ['gpc-main.js'],
-      runAt: 'document_start',
-      allFrames: true,
-      matchOriginAsFallback: true,
-      world: 'MAIN'
-    }]);
+    try {
+      await chrome.scripting.registerContentScripts([{
+        id: GPC_SCRIPT_ID,
+        matches: ['<all_urls>'],
+        js: ['gpc-main.js'],
+        runAt: 'document_start',
+        allFrames: true,
+        matchOriginAsFallback: true,
+        world: 'MAIN'
+      }]);
+    } catch (error) {
+      // Another update registered it first. That is the state we want.
+      if (!String(error && error.message).includes('Duplicate script ID')) throw error;
+    }
   } else if (!enabled && isRegistered) {
     await chrome.scripting.unregisterContentScripts({ ids: [GPC_SCRIPT_ID] });
   }
 }
 
-async function applySettings() {
-  const settings = await getSettings();
-  await applyRulesetSettings(settings);
-  await applyGpcScript(settings.gpcEnabled);
-  return settings;
+// Runs one settings update at a time. On install or reload, Chrome can start
+// several updates at once (onInstalled plus worker start). Two parallel
+// updates can both try to register the GPC script and fail with
+// "Duplicate script ID".
+let settingsQueue = Promise.resolve();
+function applySettings() {
+  const run = settingsQueue.then(async () => {
+    const settings = await getSettings();
+    await applyRulesetSettings(settings);
+    await applyGpcScript(settings.gpcEnabled);
+    return settings;
+  });
+  settingsQueue = run.catch(() => {});
+  return run;
 }
 
 
@@ -300,9 +314,7 @@ async function setPaused(siteDomain, paused) {
   if (paused) pausedSites[siteDomain] = true;
   else delete pausedSites[siteDomain];
   await chrome.storage.local.set({ pausedSites });
-  const next = await getSettings();
-  await applyRulesetSettings(next);
-  return next;
+  return applySettings();
 }
 
 async function setGlobalBlocking(enabled) {

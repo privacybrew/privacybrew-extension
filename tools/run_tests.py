@@ -176,6 +176,37 @@ def connect_fallback():
 def attach_target(cdp, target_id):
     return cdp.call('Target.attachToTarget', {'targetId': target_id, 'flatten': True})['sessionId']
 
+def attach_worker(cdp, target_id):
+    session = attach_target(cdp, target_id)
+    cdp.call('Runtime.enable', sessionId=session)
+    return session
+
+def service_worker_errors(cdp, sessions):
+    out = []
+    for event in cdp.events:
+        if event.get('sessionId') not in sessions:
+            continue
+        method = event.get('method')
+        params = event.get('params', {})
+        if method == 'Runtime.exceptionThrown':
+            out.append('exception: ' + params.get('exceptionDetails', {}).get('text', 'unknown'))
+        if method == 'Runtime.consoleAPICalled' and params.get('type') in ['error', 'assert']:
+            args = params.get('args', [])
+            text = ' '.join(str(arg.get('value', arg.get('description', ''))) for arg in args)
+            out.append('console: ' + text)
+    return out
+
+def wait_new_extension(cdp, old_target_id, timeout=10):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        targets = cdp.call('Target.getTargets')['targetInfos']
+        for t in targets:
+            if t.get('targetId') != old_target_id and t.get('type') == 'service_worker' and t.get('url', '').startswith('chrome-extension://') and t.get('url', '').endswith('/background.js'):
+                ext_id = t['url'].split('/')[2]
+                return ext_id, t['targetId']
+        time.sleep(0.25)
+    raise RuntimeError('Reloaded extension service worker not found')
+
 def wait_expr(cdp, session, expr, timeout=10):
     deadline = time.time() + timeout
     last = None
@@ -194,7 +225,7 @@ def navigate_and_wait(cdp, session, url):
     time.sleep(2.5)
 
 def eval_value(cdp, session, expr):
-    return cdp.call('Runtime.evaluate', {'expression': expr, 'returnByValue': True}, session)['result'].get('value')
+    return cdp.call('Runtime.evaluate', {'expression': expr, 'awaitPromise': True, 'returnByValue': True}, session)['result'].get('value')
 
 def find_extension(cdp):
     deadline = time.time() + 10
@@ -238,8 +269,27 @@ def run_unit(cdp):
 
 def run_e2e(cdp):
     ext_id, sw_target = find_extension(cdp)
-    sw_session = attach_target(cdp, sw_target)
+    worker_sessions = []
+    sw_session = attach_worker(cdp, sw_target)
+    worker_sessions.append(sw_session)
     cdp.call('Network.enable', sessionId=sw_session)
+    checks = []
+    checks.append(('one GPC script registered at start', len(eval_value(cdp, sw_session, "chrome.scripting.getRegisteredContentScripts({ids:['privacybrew-gpc-main']})")) == 1))
+    for _ in range(2):
+        old_target = sw_target
+        cdp.call('Extensions.loadUnpacked', {'path': str(EXT)})
+        ext_id, sw_target = wait_new_extension(cdp, old_target)
+        sw_session = attach_worker(cdp, sw_target)
+        worker_sessions.append(sw_session)
+        cdp.call('Network.enable', sessionId=sw_session)
+        time.sleep(0.5)
+        checks.append(('one GPC script registered after reload', len(eval_value(cdp, sw_session, "chrome.scripting.getRegisteredContentScripts({ids:['privacybrew-gpc-main']})")) == 1))
+    cdp.call('Runtime.evaluate', {'expression': "Promise.all([setGpc(false), setGpc(true), setGpc(false), setGpc(true)])", 'awaitPromise': True}, sw_session)
+    checks.append(('one GPC script after rapid toggles', len(eval_value(cdp, sw_session, "chrome.scripting.getRegisteredContentScripts({ids:['privacybrew-gpc-main']})")) == 1))
+    cdp.call('Runtime.evaluate', {'expression': "setGpc(false)", 'awaitPromise': True}, sw_session)
+    checks.append(('no GPC script when off', len(eval_value(cdp, sw_session, "chrome.scripting.getRegisteredContentScripts({ids:['privacybrew-gpc-main']})")) == 0))
+    cdp.call('Runtime.evaluate', {'expression': "setGpc(true)", 'awaitPromise': True}, sw_session)
+    checks.append(('one GPC script when on again', len(eval_value(cdp, sw_session, "chrome.scripting.getRegisteredContentScripts({ids:['privacybrew-gpc-main']})")) == 1))
     target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
     session = attach_target(cdp, target)
     navigate_and_wait(cdp, session, f'http://site.test:{PORT}/tracker.html')
@@ -250,7 +300,6 @@ def run_e2e(cdp):
     fps = sorted(state.get('fingerprints', {}).keys())
     fp_origins = sorted({origin for origins in state.get('fingerprints', {}).values() for origin in origins.keys()})
     badge = cdp.call('Runtime.evaluate', {'expression': f'new Promise(r => chrome.action.getBadgeText({{tabId:{tab_id}}}, r))', 'awaitPromise': True, 'returnByValue': True}, sw_session)['result']['value']
-    checks = []
     checks.append(('tracker company count', len(tracker_companies) >= 3))
     checks.append(('advertising tracker scripts blocked', not blocked_vars.get('ga') and not blocked_vars.get('ad') and not blocked_vars.get('bing')))
     checks.append(('social tracker script blocked', not blocked_vars.get('meta')))
@@ -336,8 +385,9 @@ def run_e2e(cdp):
     navigate_and_wait(cdp, session, f'http://clean.test:{PORT}/clean.html')
     _, clean_state = storage_report(cdp, sw_session)
     checks.append(('reset on clean navigation', len(clean_state.get('trackers', {})) == 0 and len(clean_state.get('unknownDomains', {})) == 0))
-    worker_requests = [e for e in cdp.events if e.get('sessionId') == sw_session and e.get('method') == 'Network.requestWillBeSent' and e.get('params', {}).get('request', {}).get('url', '').startswith(('http://', 'https://'))]
+    worker_requests = [e for e in cdp.events if e.get('sessionId') in worker_sessions and e.get('method') == 'Network.requestWillBeSent' and e.get('params', {}).get('request', {}).get('url', '').startswith(('http://', 'https://'))]
     checks.append(('extension made zero network requests', len(worker_requests) == 0))
+    checks.append(('service worker has no errors', service_worker_errors(cdp, worker_sessions) == []))
     fail = [name for name, ok in checks if not ok]
     return {'pass': len(checks) - len(fail), 'fail': len(fail), 'checks': checks, 'method': 'load-extension fallback', 'screenshot': str(shot_path), 'pausedScreenshot': str(paused_shot_path)}
 
