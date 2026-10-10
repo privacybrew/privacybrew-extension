@@ -33,11 +33,11 @@
     };
   }
 
-  function addTracker(state, match, requestDomain) {
+  function addTracker(state, match, requestDomain, status) {
     if (!match || !match.companyId) return state;
     const key = match.companyId;
     if (!state.trackers[key]) {
-      state.trackers[key] = { company: match.company, category: match.category || 'Other', categories: {}, domains: {} };
+      state.trackers[key] = { company: match.company, category: match.category || 'Other', categories: {}, domains: {}, blockedDomains: {}, allowedDomains: {} };
     }
     const category = match.category || 'Other';
     state.trackers[key].categories = state.trackers[key].categories || {};
@@ -46,6 +46,10 @@
       state.trackers[key].category = category;
     }
     state.trackers[key].domains[requestDomain] = true;
+    state.trackers[key].blockedDomains = state.trackers[key].blockedDomains || {};
+    state.trackers[key].allowedDomains = state.trackers[key].allowedDomains || {};
+    if (status === 'blocked') state.trackers[key].blockedDomains[requestDomain] = true;
+    else state.trackers[key].allowedDomains[requestDomain] = true;
     state.updatedAt = Date.now();
     return state;
   }
@@ -100,9 +104,14 @@
         company: value.company,
         category: categories[0] || 'Other',
         categories,
-        domains: Object.keys(value.domains || {}).sort()
+        domains: Object.keys(value.domains || {}).sort(),
+        blockedDomains: Object.keys(value.blockedDomains || {}).sort(),
+        allowedDomains: Object.keys(value.allowedDomains || {}).sort(),
+        status: Object.keys(value.blockedDomains || {}).length ? 'Blocked' : 'Allowed'
       };
     }).sort((a, b) => (CATEGORY_RANK[a.category] ?? 99) - (CATEGORY_RANK[b.category] ?? 99) || a.company.localeCompare(b.company));
+    const blockedTrackerCount = trackers.reduce((sum, tracker) => sum + tracker.blockedDomains.length, 0);
+    const blockedCompanyCount = trackers.filter((tracker) => tracker.blockedDomains.length > 0).length;
     const fingerprints = Object.entries(state.fingerprints || {}).map(([technique, origins]) => ({
       technique,
       label: FINGERPRINT_LABELS[technique] || technique,
@@ -114,6 +123,8 @@
       siteDomain: state.siteDomain || '',
       label: overallLabel(trackers.length, fingerprints.length > 0),
       trackerCount: trackers.length,
+      blockedTrackerCount,
+      blockedCompanyCount,
       trackers,
       unknownDomains: Object.keys(state.unknownDomains || {}).sort(),
       cookieDomains: Object.keys(state.cookieDomains || {}).sort(),

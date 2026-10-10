@@ -3,6 +3,14 @@ importScripts('lib/psl.js', 'lib/disconnect.js', 'lib/report.js');
 const STORE_PREFIX = 'tab:';
 const WRITE_DELAY_MS = 150;
 const supportedProtocols = new Set(['http:', 'https:']);
+const BLOCK_RULESETS = ['allow_same_company', 'block_advertising', 'block_analytics', 'block_social', 'block_fingerprinting', 'block_cryptomining'];
+const GPC_RULESET = 'gpc_headers';
+const GPC_SCRIPT_ID = 'privacybrew-gpc-main';
+const PAUSE_RULE_BASE = 100000;
+const SAME_COMPANY_SESSION_BASE = 2000000;
+const SAME_COMPANY_RULES_PER_TAB = 1000;
+const RESOURCE_TYPES_WITHOUT_MAIN = ['sub_frame', 'stylesheet', 'script', 'image', 'font', 'object', 'xmlhttprequest', 'ping', 'csp_report', 'media', 'websocket', 'webtransport', 'webbundle', 'other'];
+const BLOCKED_CATEGORIES = new Set(['Advertising', 'Analytics', 'Social', 'Fingerprinting', 'Cryptomining']);
 let dataReady = null;
 let psl = null;
 let disconnect = null;
@@ -50,6 +58,116 @@ function siteDomainFor(url) {
   return psl.registrableDomain(new URL(url).hostname);
 }
 
+async function getSettings() {
+  const stored = await chrome.storage.local.get({ blockingEnabled: true, gpcEnabled: true, pausedSites: {} });
+  return {
+    blockingEnabled: stored.blockingEnabled !== false,
+    gpcEnabled: stored.gpcEnabled !== false,
+    pausedSites: stored.pausedSites || {}
+  };
+}
+
+function pauseRuleId(siteDomain) {
+  let hash = 0;
+  for (const ch of siteDomain) hash = ((hash * 31) + ch.charCodeAt(0)) >>> 0;
+  return PAUSE_RULE_BASE + (hash % 1000000);
+}
+
+async function applyPauseRules(pausedSites) {
+  const existing = await chrome.declarativeNetRequest.getDynamicRules();
+  const removeRuleIds = existing.filter((rule) => rule.id >= PAUSE_RULE_BASE).map((rule) => rule.id);
+  const addRules = Object.keys(pausedSites || {}).sort().map((siteDomain) => ({
+    id: pauseRuleId(siteDomain),
+    priority: 10000,
+    action: { type: 'allowAllRequests' },
+    condition: {
+      requestDomains: [siteDomain],
+      resourceTypes: ['main_frame', 'sub_frame']
+    }
+  }));
+  await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules });
+}
+
+async function applyRulesetSettings(settings) {
+  const enableRulesetIds = [];
+  const disableRulesetIds = [];
+  if (settings.blockingEnabled) enableRulesetIds.push(...BLOCK_RULESETS);
+  else disableRulesetIds.push(...BLOCK_RULESETS);
+  if (settings.gpcEnabled) enableRulesetIds.push(GPC_RULESET);
+  else disableRulesetIds.push(GPC_RULESET);
+  await chrome.declarativeNetRequest.updateEnabledRulesets({ enableRulesetIds, disableRulesetIds });
+  await applyPauseRules(settings.pausedSites);
+}
+
+async function applyGpcScript(enabled) {
+  const registered = await chrome.scripting.getRegisteredContentScripts({ ids: [GPC_SCRIPT_ID] });
+  const isRegistered = registered.length > 0;
+  if (enabled && !isRegistered) {
+    await chrome.scripting.registerContentScripts([{
+      id: GPC_SCRIPT_ID,
+      matches: ['<all_urls>'],
+      js: ['gpc-main.js'],
+      runAt: 'document_start',
+      allFrames: true,
+      matchOriginAsFallback: true,
+      world: 'MAIN'
+    }]);
+  } else if (!enabled && isRegistered) {
+    await chrome.scripting.unregisterContentScripts({ ids: [GPC_SCRIPT_ID] });
+  }
+}
+
+async function applySettings() {
+  const settings = await getSettings();
+  await applyRulesetSettings(settings);
+  await applyGpcScript(settings.gpcEnabled);
+  return settings;
+}
+
+
+function companyIdsForSite(siteDomain) {
+  const ids = [];
+  const companies = (disconnect && disconnect.data && disconnect.data.companies) || {};
+  for (const [companyId, company] of Object.entries(companies)) {
+    const props = company.properties || [];
+    if (props.some((property) => psl.registrableDomain(property) === siteDomain || property === siteDomain)) ids.push(companyId);
+  }
+  return ids;
+}
+
+function blockedDomainsForCompanies(companyIds) {
+  const ids = new Set(companyIds);
+  const domains = [];
+  const domainData = (disconnect && disconnect.data && disconnect.data.domains) || {};
+  for (const [domain, rec] of Object.entries(domainData)) {
+    if (ids.has(rec.companyId) && BLOCKED_CATEGORIES.has(rec.category)) domains.push(domain);
+  }
+  return domains.sort();
+}
+
+function sameCompanyRuleBase(tabId) {
+  return SAME_COMPANY_SESSION_BASE + (tabId % 1000) * SAME_COMPANY_RULES_PER_TAB;
+}
+
+async function applySameCompanySessionRules(tabId, siteDomain) {
+  const existing = await chrome.declarativeNetRequest.getSessionRules();
+  const base = sameCompanyRuleBase(tabId);
+  const removeRuleIds = existing.filter((rule) => rule.id > base && rule.id < base + SAME_COMPANY_RULES_PER_TAB).map((rule) => rule.id);
+  const companyIds = siteDomain ? companyIdsForSite(siteDomain) : [];
+  const domains = blockedDomainsForCompanies(companyIds);
+  const addRules = domains.slice(0, SAME_COMPANY_RULES_PER_TAB - 1).map((domain, index) => ({
+    id: base + index + 1,
+    priority: 3,
+    action: { type: 'allow' },
+    condition: {
+      tabIds: [tabId],
+      requestDomains: [domain],
+      resourceTypes: RESOURCE_TYPES_WITHOUT_MAIN
+    }
+  }));
+  await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds, addRules });
+}
+
 async function getState(tabId) {
   if (memory.has(tabId)) return memory.get(tabId);
   const obj = await chrome.storage.session.get(key(tabId));
@@ -77,7 +195,7 @@ async function saveNow(tabId, state) {
 async function updateBadge(tabId, state) {
   const summary = PB.Report.summarize(state || {});
   await chrome.action.setBadgeBackgroundColor({ tabId, color: '#9b6dd1' });
-  await chrome.action.setBadgeText({ tabId, text: summary.trackerCount ? String(summary.trackerCount) : '' });
+  await chrome.action.setBadgeText({ tabId, text: summary.blockedCompanyCount ? String(summary.blockedCompanyCount) : '' });
 }
 
 async function resetTab(tabId, url) {
@@ -85,6 +203,7 @@ async function resetTab(tabId, url) {
   const siteDomain = siteDomainFor(url);
   const state = PB.Report.emptyState(tabId, url || '', siteDomain);
   state.status = siteDomain ? 'ok' : 'unsupported';
+  await applySameCompanySessionRules(tabId, siteDomain);
   await saveNow(tabId, state);
   await updateBadge(tabId, state);
 }
@@ -105,21 +224,40 @@ function hasSetCookie(headers) {
   return (headers || []).some((header) => header.name && header.name.toLowerCase() === 'set-cookie');
 }
 
-async function observeRequest(details) {
-  if (details.tabId < 0 || !details.url || !isSupportedUrl(details.url)) return;
-  const state = await ensureTabState(details.tabId, null);
+async function isSitePaused(siteDomain) {
+  const settings = await getSettings();
+  return Boolean(settings.pausedSites[siteDomain]);
+}
+
+async function observeTrackerUrl(tabId, url, status) {
+  if (tabId < 0 || !url || !isSupportedUrl(url)) return;
+  const state = await ensureTabState(tabId, null);
   if (!state || state.status !== 'ok' || !state.siteDomain) return;
-  const requestHost = psl.cleanHost(new URL(details.url).hostname);
+  const requestHost = psl.cleanHost(new URL(url).hostname);
   const requestDomain = psl.registrableDomain(requestHost);
   if (!requestDomain || requestDomain === state.siteDomain) return;
   const match = disconnect.find(requestHost);
   if (match && !disconnect.sameCompanyAsSite(match, state.siteDomain)) {
-    PB.Report.addTracker(state, match, requestHost);
+    const settings = await getSettings();
+    const paused = Boolean(settings.pausedSites[state.siteDomain]);
+    const wouldBlock = settings.blockingEnabled && !paused && BLOCKED_CATEGORIES.has(match.category);
+    const blocked = status === 'blocked' || (status === 'seen' && wouldBlock);
+    PB.Report.addTracker(state, match, requestHost, blocked ? 'blocked' : 'allowed');
   } else if (!match) {
     PB.Report.addUnknown(state, requestDomain);
   }
-  scheduleSave(details.tabId, state);
-  await updateBadge(details.tabId, state);
+  scheduleSave(tabId, state);
+  await updateBadge(tabId, state);
+}
+
+async function observeRequest(details) {
+  await observeTrackerUrl(details.tabId, details.url, 'allowed');
+}
+
+async function observeBlocked(details) {
+  if (details.error === 'net::ERR_BLOCKED_BY_CLIENT') {
+    await observeTrackerUrl(details.tabId, details.url, 'blocked');
+  }
 }
 
 async function observeHeaders(details) {
@@ -140,11 +278,42 @@ function resetOnTopFrame(details) {
   }
 }
 
+async function setPaused(siteDomain, paused) {
+  const settings = await getSettings();
+  const pausedSites = Object.assign({}, settings.pausedSites);
+  if (paused) pausedSites[siteDomain] = true;
+  else delete pausedSites[siteDomain];
+  await chrome.storage.local.set({ pausedSites });
+  const next = await getSettings();
+  await applyRulesetSettings(next);
+  return next;
+}
+
+async function setGlobalBlocking(enabled) {
+  await chrome.storage.local.set({ blockingEnabled: Boolean(enabled) });
+  return applySettings();
+}
+
+async function setGpc(enabled) {
+  await chrome.storage.local.set({ gpcEnabled: Boolean(enabled) });
+  return applySettings();
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  applySettings().catch(console.error);
+});
+chrome.runtime.onStartup.addListener(() => {
+  applySettings().catch(console.error);
+});
 chrome.webNavigation.onCommitted.addListener(resetOnTopFrame);
 chrome.webNavigation.onHistoryStateUpdated.addListener(resetOnTopFrame);
 
 chrome.webRequest.onBeforeRequest.addListener((details) => {
   observeRequest(details).catch(console.error);
+}, { urls: ['<all_urls>'] });
+
+chrome.webRequest.onErrorOccurred.addListener((details) => {
+  observeBlocked(details).catch(console.error);
 }, { urls: ['<all_urls>'] });
 
 chrome.webRequest.onHeadersReceived.addListener((details) => {
@@ -154,10 +323,15 @@ chrome.webRequest.onHeadersReceived.addListener((details) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     await ensureData();
+    if (message && message.type === 'resource' && sender.tab && sender.tab.id >= 0) {
+      await observeTrackerUrl(sender.tab.id, message.url || '', message.status || 'seen');
+      sendResponse({ ok: true });
+      return;
+    }
     if (message && message.type === 'fingerprint' && sender.tab && sender.tab.id >= 0) {
       const state = await ensureTabState(sender.tab.id, sender.url || null);
       if (state && state.status === 'ok') {
-        PB.Report.addFingerprint(state, message.technique, message.origin || 'Unknown script');
+        PB.Report.addFingerprint(state, message.technique, message.origin || 'Script not known');
         scheduleSave(sender.tab.id, state);
         await updateBadge(sender.tab.id, state);
       }
@@ -166,12 +340,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message && message.type === 'getReport') {
       const state = await ensureTabState(message.tabId, null);
-      sendResponse({ ok: true, report: state ? PB.Report.summarize(state) : { status: 'needReload' } });
+      const settings = await getSettings();
+      const summary = state ? PB.Report.summarize(state) : { status: 'needReload' };
+      summary.settings = settings;
+      summary.sitePaused = Boolean(summary.siteDomain && settings.pausedSites[summary.siteDomain]);
+      sendResponse({ ok: true, report: summary });
+      return;
+    }
+    if (message && message.type === 'getSettings') {
+      sendResponse({ ok: true, settings: await getSettings() });
+      return;
+    }
+    if (message && message.type === 'setSitePaused') {
+      const state = await getState(message.tabId);
+      if (!state || !state.siteDomain) throw new Error('No website report');
+      const settings = await setPaused(state.siteDomain, Boolean(message.paused));
+      sendResponse({ ok: true, settings });
+      return;
+    }
+    if (message && message.type === 'setGlobalBlocking') {
+      sendResponse({ ok: true, settings: await setGlobalBlocking(message.enabled) });
+      return;
+    }
+    if (message && message.type === 'setGpc') {
+      sendResponse({ ok: true, settings: await setGpc(message.enabled) });
+      return;
+    }
+    if (message && message.type === 'reloadTab') {
+      await chrome.tabs.reload(message.tabId);
+      sendResponse({ ok: true });
       return;
     }
     if (message && message.type === 'debugGetReport') {
       const state = await ensureTabState(message.tabId, null);
-      sendResponse({ ok: true, state, report: state ? PB.Report.summarize(state) : null });
+      sendResponse({ ok: true, state, report: state ? PB.Report.summarize(state) : null, settings: await getSettings() });
       return;
     }
     sendResponse({ ok: false });
@@ -182,6 +384,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.tabs && chrome.tabs.onRemoved && chrome.tabs.onRemoved.addListener((tabId) => {
   memory.delete(tabId);
   chrome.storage.session.remove(key(tabId));
+  chrome.declarativeNetRequest.getSessionRules().then((rules) => {
+    const base = sameCompanyRuleBase(tabId);
+    const removeRuleIds = rules.filter((rule) => rule.id > base && rule.id < base + SAME_COMPANY_RULES_PER_TAB).map((rule) => rule.id);
+    if (removeRuleIds.length) chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds });
+  });
 });
 
-ensureData().catch(console.error);
+ensureData().then(applySettings).catch(console.error);

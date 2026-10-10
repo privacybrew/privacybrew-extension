@@ -16,9 +16,12 @@
   }
   function ok(value, message) { if (!value) throw new Error(message); }
 
-  const [pslData, disconnectData] = await Promise.all([
+  const [pslData, disconnectData, rulesMeta, adRules, contentRules] = await Promise.all([
     fetch('/extension/data/psl.json').then(r => r.json()),
-    fetch('/extension/data/disconnect.json').then(r => r.json())
+    fetch('/extension/data/disconnect.json').then(r => r.json()),
+    fetch('/extension/rules/metadata.json').then(r => r.json()),
+    fetch('/extension/rules/block_advertising.json').then(r => r.json()),
+    fetch('/extension/rules/allow_same_company.json').then(r => r.json())
   ]);
   const psl = PB.PSL.initPsl(pslData);
   const disconnect = PB.Disconnect.initDisconnect(disconnectData, psl);
@@ -41,16 +44,28 @@
   test('Fingerprint bumps label', () => eq(PB.Report.overallLabel(1, true), 'Some tracking', 'fingerprint bump'));
   test('Plural helper keeps singular', () => eq(PB.Report.plural(1, 'company', 'companies'), 'company', 'singular plural'));
   test('Plural helper uses plural', () => eq(PB.Report.plural(2, 'company', 'companies'), 'companies', 'plural helper'));
+  test('DNR rule counts are under the static limit', () => ok(rulesMeta.totalStaticRules < 30000, 'static DNR limit'));
+  test('DNR has advertising rules', () => ok(rulesMeta.counts.Advertising > 0, 'advertising rule count'));
+  test('DNR has no Content ruleset', () => ok(!rulesMeta.counts.Content, 'no content rules'));
+  test('DNR rule IDs are unique', () => {
+    const ids = new Set(adRules.map(rule => rule.id));
+    eq(ids.size, adRules.length, 'unique advertising IDs');
+  });
+  test('DNR rules have property exclusions', () => ok(adRules.some(rule => (rule.condition.excludedInitiatorDomains || []).includes('youtube.com')), 'property exclusion'));
+  test('DNR has same company allow rules', () => ok(contentRules.some(rule => (rule.condition.initiatorDomains || []).includes('youtube.com')), 'same company allow rule'));
+
   test('Report summarizes distinct trackers', () => {
     const s = PB.Report.emptyState(1, 'https://example.com', 'example.com');
-    PB.Report.addTracker(s, disconnect.find('google-analytics.com'), 'google-analytics.com');
-    PB.Report.addTracker(s, disconnect.find('doubleclick.net'), 'doubleclick.net');
-    eq(PB.Report.summarize(s).trackerCount, 1, 'same company count');
+    PB.Report.addTracker(s, disconnect.find('google-analytics.com'), 'google-analytics.com', 'allowed');
+    PB.Report.addTracker(s, disconnect.find('doubleclick.net'), 'doubleclick.net', 'blocked');
+    const summary = PB.Report.summarize(s);
+    eq(summary.trackerCount, 1, 'same company count');
+    eq(summary.blockedCompanyCount, 1, 'blocked company count');
   });
   test('Report keeps multiple company categories', () => {
     const s = PB.Report.emptyState(1, 'https://example.com', 'example.com');
-    PB.Report.addTracker(s, disconnect.find('google-analytics.com'), 'google-analytics.com');
-    PB.Report.addTracker(s, disconnect.find('doubleclick.net'), 'doubleclick.net');
+    PB.Report.addTracker(s, disconnect.find('google-analytics.com'), 'google-analytics.com', 'allowed');
+    PB.Report.addTracker(s, disconnect.find('doubleclick.net'), 'doubleclick.net', 'blocked');
     const tracker = PB.Report.summarize(s).trackers[0];
     ok(tracker.categories.includes('Advertising'), 'advertising category');
     ok(tracker.categories.includes('Analytics'), 'analytics category');

@@ -29,6 +29,9 @@ CATEGORY_MAP = {
 }
 CATEGORY_PRIORITY = ['Advertising', 'Social', 'Analytics', 'Cryptomining', 'Fingerprinting', 'Content', 'Other']
 PRIORITY_INDEX = {name: i for i, name in enumerate(CATEGORY_PRIORITY)}
+BLOCKED_CATEGORIES = ['Advertising', 'Analytics', 'Social', 'Fingerprinting', 'Cryptomining']
+RESOURCE_TYPES_WITHOUT_MAIN = ['sub_frame', 'stylesheet', 'script', 'image', 'font', 'object', 'xmlhttprequest', 'ping', 'csp_report', 'media', 'websocket', 'webtransport', 'webbundle', 'other']
+RESOURCE_TYPES_ALL = ['main_frame'] + RESOURCE_TYPES_WITHOUT_MAIN
 
 def fetch(url):
     req = urllib.request.Request(url, headers={'User-Agent': 'PrivacyBrew data builder'})
@@ -71,8 +74,10 @@ def parse_disconnect(raw):
                             resources_set.update(normalize_domain(r) for r in resources)
                         elif isinstance(resources, str):
                             resources_set.add(normalize_domain(resources))
-                props = sorted(p for p in props_set if p)
                 resources = sorted(r for r in resources_set if r)
+                props = sorted(p for p in (props_set | resources_set) if p)
+                if company_id in companies:
+                    props = sorted(set(companies[company_id].get('properties', [])) | set(props))
                 companies[company_id] = {'name': company, 'properties': props}
                 for domain in resources:
                     prev = domains.get(domain)
@@ -116,6 +121,82 @@ def parse_psl(text):
         'exception': sorted(set(exception)),
     }
 
+def build_rules(disconnect_data):
+    rules_dir = ROOT / 'extension' / 'rules'
+    rules_dir.mkdir(parents=True, exist_ok=True)
+    for old in rules_dir.glob('*.json'):
+        old.unlink()
+    counts = {}
+    used_ids = set()
+    next_id = 1
+    by_category = {category: [] for category in BLOCKED_CATEGORIES}
+    allow_rules = []
+    for domain, rec in disconnect_data['domains'].items():
+        category = rec.get('category', 'Other')
+        if category not in by_category:
+            continue
+        company = disconnect_data['companies'].get(rec.get('companyId'), {})
+        excluded = sorted({normalize_domain(p) for p in company.get('properties', []) if normalize_domain(p)})
+        rule = {
+            'id': next_id,
+            'priority': 1,
+            'action': {'type': 'block'},
+            'condition': {
+                'requestDomains': [domain],
+                'domainType': 'thirdParty',
+                'resourceTypes': RESOURCE_TYPES_WITHOUT_MAIN
+            }
+        }
+        if excluded:
+            rule['condition']['excludedInitiatorDomains'] = excluded
+        used_ids.add(next_id)
+        next_id += 1
+        by_category[category].append(rule)
+        if excluded:
+            allow_rule = {
+                'id': next_id,
+                'priority': 2,
+                'action': {'type': 'allow'},
+                'condition': {
+                    'requestDomains': [domain],
+                    'initiatorDomains': excluded,
+                    'resourceTypes': RESOURCE_TYPES_WITHOUT_MAIN
+                }
+            }
+            used_ids.add(next_id)
+            next_id += 1
+            allow_rules.append(allow_rule)
+    for category, rules in by_category.items():
+        slug = category.lower()
+        (rules_dir / f'block_{slug}.json').write_text(json.dumps(rules, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
+        counts[category] = len(rules)
+    (rules_dir / 'allow_same_company.json').write_text(json.dumps(allow_rules, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
+    gpc_rule = [{
+        'id': next_id,
+        'priority': 1,
+        'action': {
+            'type': 'modifyHeaders',
+            'requestHeaders': [{ 'header': 'Sec-GPC', 'operation': 'set', 'value': '1' }]
+        },
+        'condition': { 'resourceTypes': RESOURCE_TYPES_ALL }
+    }]
+    used_ids.add(next_id)
+    (rules_dir / 'gpc_headers.json').write_text(json.dumps(gpc_rule, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
+    metadata = {
+        'generatedAt': datetime.now(timezone.utc).date().isoformat(),
+        'blockedCategories': BLOCKED_CATEGORIES,
+        'categoryPriority': CATEGORY_PRIORITY,
+        'counts': counts,
+        'totalBlockRules': sum(counts.values()),
+        'sameCompanyAllowRules': len(allow_rules),
+        'totalStaticRules': sum(counts.values()) + len(allow_rules) + 1,
+        'uniqueRuleIds': len(used_ids),
+        'limitNote': 'Chrome allows at least 30000 static DNR rules for one extension. This prototype stays below that limit.',
+        'sameCompanyChoice': 'Block rules use excludedInitiatorDomains, and allow_same_company rules use initiatorDomains. Both are generated from Disconnect properties for that company.'
+    }
+    (rules_dir / 'metadata.json').write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+    return metadata
+
 def make_icons():
     ICONS.mkdir(parents=True, exist_ok=True)
     for size in (16, 32, 48, 128):
@@ -135,8 +216,11 @@ def main():
     DATA.mkdir(parents=True, exist_ok=True)
     services_raw = fetch(SERVICES_URL).decode('utf-8')
     psl_raw = fetch(PSL_URL).decode('utf-8')
-    (DATA / 'disconnect.json').write_text(json.dumps(parse_disconnect(services_raw), separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
-    (DATA / 'psl.json').write_text(json.dumps(parse_psl(psl_raw), separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
+    disconnect_data = parse_disconnect(services_raw)
+    psl_data = parse_psl(psl_raw)
+    (DATA / 'disconnect.json').write_text(json.dumps(disconnect_data, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
+    (DATA / 'psl.json').write_text(json.dumps(psl_data, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
+    rules_meta = build_rules(disconnect_data)
     today = datetime.now(timezone.utc).date().isoformat()
     (DATA / 'SOURCES.md').write_text(f'''# Data sources
 
@@ -149,6 +233,9 @@ Fetched on {today}.
 - Output: `disconnect.json`
 - Notes: PrivacyBrew maps Disconnect categories to plain category chips. Email and EmailAggressive map to Other. Anti-fraud and ConsentManagers map to Other. Disconnect maps to Social.
 - Category priority: Advertising, Social, Analytics, Cryptomining, Fingerprinting, Content, Other. A domain in more than one category uses the highest-priority match.
+- Blocking: Advertising, Analytics, Social, Fingerprinting, and Cryptomining rules are blocked. Content is not blocked because pages often need embedded content to work.
+- Same-company requests: generated block rules use `excludedInitiatorDomains`. A static allow ruleset also uses `initiatorDomains`. Both use Disconnect properties for that company.
+- Rule counts: {rules_meta['counts']} with {rules_meta['totalBlockRules']} block rules and {rules_meta['sameCompanyAllowRules']} same-company allow rules.
 - See `THIRD_PARTY_LICENSES.md`. The upstream data file includes the full license notice.
 
 ## Public Suffix List
@@ -158,10 +245,10 @@ Fetched on {today}.
 - Output: `psl.json`
 - Notes: The generated file includes ICANN and PRIVATE rules, wildcard rules, and exception rules.
 ''', encoding='utf-8')
-    gpl = fetch(GPL_URL).decode('utf-8')
-    (ROOT / 'LICENSE').write_text(gpl, encoding='utf-8')
-    make_icons()
-    print('Built data and icons')
+    if not (ROOT / 'LICENSE').exists():
+        gpl = fetch(GPL_URL).decode('utf-8')
+        (ROOT / 'LICENSE').write_text(gpl, encoding='utf-8')
+    print('Built data and rules')
 
 if __name__ == '__main__':
     main()

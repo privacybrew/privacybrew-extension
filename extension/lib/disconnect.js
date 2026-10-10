@@ -28,7 +28,7 @@
       });
     }
 
-    return { find, sameCompanyAsSite };
+    return { data, find, sameCompanyAsSite };
   }
   global.PB = global.PB || {};
   global.PB.Disconnect = { initDisconnect };

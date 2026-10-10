@@ -19,23 +19,33 @@
   "permissions": [
     "webRequest",
     "webNavigation",
-    "storage"
+    "storage",
+    "declarativeNetRequest",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content-main.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content-main.js"
+      ],
       "run_at": "document_start",
       "all_frames": true,
       "match_about_blank": true,
       "world": "MAIN"
     },
     {
-      "matches": ["<all_urls>"],
-      "js": ["content-bridge.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content-bridge.js"
+      ],
       "run_at": "document_start",
       "all_frames": true,
       "match_about_blank": true
@@ -46,5 +56,44 @@
     "32": "icons/icon-32.png",
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
+  },
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "allow_same_company",
+        "enabled": true,
+        "path": "rules/allow_same_company.json"
+      },
+      {
+        "id": "block_advertising",
+        "enabled": true,
+        "path": "rules/block_advertising.json"
+      },
+      {
+        "id": "block_analytics",
+        "enabled": true,
+        "path": "rules/block_analytics.json"
+      },
+      {
+        "id": "block_social",
+        "enabled": true,
+        "path": "rules/block_social.json"
+      },
+      {
+        "id": "block_fingerprinting",
+        "enabled": true,
+        "path": "rules/block_fingerprinting.json"
+      },
+      {
+        "id": "block_cryptomining",
+        "enabled": true,
+        "path": "rules/block_cryptomining.json"
+      },
+      {
+        "id": "gpc_headers",
+        "enabled": true,
+        "path": "rules/gpc_headers.json"
+      }
+    ]
   }
 }

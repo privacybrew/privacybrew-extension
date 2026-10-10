@@ -23,6 +23,27 @@
       <p id="messageText">Open a website and reload it to check it.</p>
     </section>
 
+
+    <section class="card" id="controlsCard">
+      <h2>Blocking settings</h2>
+      <div class="setting-row">
+        <span>Blocking on this website</span>
+        <button id="siteBlockToggle" type="button" aria-pressed="true">On</button>
+      </div>
+      <div class="setting-row">
+        <span>Block trackers on all websites</span>
+        <button id="globalBlockToggle" type="button" aria-pressed="true">On</button>
+      </div>
+      <div class="setting-row">
+        <span>Ask websites not to sell my data</span>
+        <button id="gpcToggle" type="button" aria-pressed="true">On</button>
+      </div>
+      <div id="reloadHint" class="reload-hint" hidden>
+        <p>Reload the page to see the change.</p>
+        <button id="reloadButton" type="button">Reload page</button>
+      </div>
+    </section>
+
     <section class="card" id="trackersCard">
       <h2>Companies that see your visit</h2>
       <p id="trackerSummary" class="muted">No known tracker companies found.</p>
@@ -53,9 +74,9 @@
     </section>
 
     <footer class="footer">
-      <p>PrivacyBrew finds known trackers only.</p>
-      <p>It does not block anything yet.</p>
-      <p>Some companies can be missing from this report.</p>
+      <p>PrivacyBrew blocks known trackers only.</p>
+      <p>Some websites can break.</p>
+      <p>Turn off blocking for that website.</p>
       <p><a id="dataLink" href="https://disconnect.me/trackerprotection" target="_blank" rel="noreferrer">Tracker list: Disconnect (CC BY-NC-SA 4.0)</a></p>
       <a id="checkLink" href="https://privacybrew.app/check.html" target="_blank" rel="noreferrer">Check your browser's privacy</a>
     </footer>

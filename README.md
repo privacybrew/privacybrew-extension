@@ -2,7 +2,7 @@
 
 PrivacyBrew is a Chrome Manifest V3 prototype for Chrome, Edge, Brave, and Opera. It shows a plain-language privacy report card for the current website.
 
-This prototype detects known trackers, third-party cookie attempts, and some fingerprinting signals. It does not block anything yet. The extension makes no network requests of its own and uses only local data files.
+This prototype blocks known trackers by default. It also detects third-party cookie attempts and some fingerprint methods. The extension makes no network requests of its own and uses only local data files.
 
 ## Load the extension
 
@@ -20,7 +20,7 @@ Run:
 python3 tools/build_data.py
 ```
 
-The script downloads data files only at build time. It writes generated JSON to `extension/data/` and records sources in `extension/data/SOURCES.md`.
+The script downloads data files only at build time. It writes generated JSON to `extension/data/` and static blocking rules to `extension/rules/`. It records sources in `extension/data/SOURCES.md`.
 
 ## Run tests
 
@@ -40,6 +40,24 @@ The extension code is GPLv3. See `LICENSE`.
 The Disconnect data file is CC BY-NC-SA 4.0. It is a separate generated file under its own license. It is non-commercial and share-alike.
 
 The Public Suffix List data file is MPL-2.0. It is a separate generated file under its own license.
+
+## Blocking
+
+PrivacyBrew uses Manifest V3 `declarativeNetRequest` static rules. Blocking is on by default.
+
+Blocked categories are Advertising, Analytics, Social, Fingerprinting, and Cryptomining. Content is not blocked because pages often need embedded video, maps, and other page parts.
+
+PrivacyBrew uses same-company allow rules from Disconnect properties. This lets a company website load its own company resources.
+
+You can pause blocking for one website. You can also turn blocking off for all websites. Reload the page after you change blocking.
+
+The toolbar badge shows the number of blocked tracker companies on the current page.
+
+## GPC
+
+The GPC setting is on by default. It sends `Sec-GPC: 1` with browser requests. It also sets `navigator.globalPrivacyControl` to true in page scripts.
+
+PrivacyBrew uses a dynamic main-world content script for this setting. This avoids a first-load race after you turn GPC off or on.
 
 ## Report labels
 
@@ -70,12 +88,10 @@ Tiny canvases under 16 by 16 pixels are ignored. Small icons and layout checks c
 
 ## Limits
 
-PrivacyBrew finds known trackers only. It can miss new companies, hidden redirects, or tracking that does not use the watched APIs. It does not block requests, set a GPC header, clear cookies, or stop fingerprinting yet.
+PrivacyBrew blocks known trackers only. It can miss new companies, hidden redirects, or tracking that does not use the watched APIs. Some websites can break. Turn off blocking for that website if this happens. PrivacyBrew does not clear cookies or stop fingerprinting yet.
 
 ## Future work
 
-- Add blocking with `declarativeNetRequest`.
-- Add a Global Privacy Control header.
 - Add cookie controls.
 - Add stronger fingerprint protection.
 - Add user settings and report history.
