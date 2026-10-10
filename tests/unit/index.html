@@ -1,0 +1,50 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>PrivacyBrew unit tests</title>
+<script src="../../extension/lib/psl.js"></script>
+<script src="../../extension/lib/disconnect.js"></script>
+<script src="../../extension/lib/report.js"></script>
+<script>
+(async () => {
+  const results = [];
+  function test(name, fn) {
+    try { fn(); results.push({ name, ok: true }); }
+    catch (error) { results.push({ name, ok: false, error: String(error && error.message || error) }); }
+  }
+  function eq(actual, expected, message) {
+    if (actual !== expected) throw new Error(`${message}: expected ${expected}, got ${actual}`);
+  }
+  function ok(value, message) { if (!value) throw new Error(message); }
+
+  const [pslData, disconnectData] = await Promise.all([
+    fetch('/extension/data/psl.json').then(r => r.json()),
+    fetch('/extension/data/disconnect.json').then(r => r.json())
+  ]);
+  const psl = PB.PSL.initPsl(pslData);
+  const disconnect = PB.Disconnect.initDisconnect(disconnectData, psl);
+
+  test('PSL handles co.uk', () => eq(psl.registrableDomain('news.bbc.co.uk'), 'bbc.co.uk', 'co.uk registrable domain'));
+  test('PSL handles private github.io', () => eq(psl.registrableDomain('team.github.io'), 'team.github.io', 'github.io registrable domain'));
+  test('PSL handles ck wildcard', () => eq(psl.registrableDomain('a.b.ck'), 'a.b.ck', 'ck wildcard domain'));
+  test('PSL handles ck exception', () => eq(psl.registrableDomain('www.ck'), 'www.ck', 'ck exception domain'));
+  test('PSL keeps IP address', () => eq(psl.registrableDomain('127.0.0.1'), '127.0.0.1', 'IP address'));
+  test('PSL keeps localhost', () => eq(psl.registrableDomain('localhost'), 'localhost', 'localhost'));
+  test('Disconnect matches subdomains', () => ok(disconnect.find('www.google-analytics.com'), 'google analytics match'));
+  test('Disconnect maps company', () => eq(disconnect.find('static.doubleclick.net').company, 'Google', 'doubleclick company'));
+  test('Disconnect treats owned property as first party', () => ok(disconnect.sameCompanyAsSite(disconnect.find('doubleclick.net'), 'google.com'), 'Google property is same company'));
+  test('Disconnect does not treat other site as first party', () => ok(!disconnect.sameCompanyAsSite(disconnect.find('doubleclick.net'), 'example.com'), 'example is not Google'));
+  test('Overall label low', () => eq(PB.Report.overallLabel(2, false), 'Little tracking found', 'low label'));
+  test('Overall label middle', () => eq(PB.Report.overallLabel(3, false), 'Some tracking', 'middle label'));
+  test('Overall label high', () => eq(PB.Report.overallLabel(6, false), 'A lot of tracking', 'high label'));
+  test('Fingerprint bumps label', () => eq(PB.Report.overallLabel(1, true), 'Some tracking', 'fingerprint bump'));
+  test('Report summarizes distinct trackers', () => {
+    const s = PB.Report.emptyState(1, 'https://example.com', 'example.com');
+    PB.Report.addTracker(s, disconnect.find('google-analytics.com'), 'google-analytics.com');
+    PB.Report.addTracker(s, disconnect.find('doubleclick.net'), 'doubleclick.net');
+    eq(PB.Report.summarize(s).trackerCount, 1, 'same company count');
+  });
+
+  window.__TEST_DONE__ = { pass: results.filter(r => r.ok).length, fail: results.filter(r => !r.ok).length, results };
+})();
+</script>
+<body>Unit tests</body>

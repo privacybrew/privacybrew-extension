@@ -1,0 +1,64 @@
+:root {
+  color-scheme: dark;
+  --bg: #120a1a;
+  --panel: #1f1329;
+  --panel-2: #281a35;
+  --border: #3a2c4a;
+  --accent: #9b6dd1;
+  --accent-2: #5fae96;
+  --warning: #e8a87c;
+  --text: #f0eaf7;
+  --text-dim: #b8a8c9;
+  --text-faint: #9585ad;
+}
+* { box-sizing: border-box; }
+body {
+  width: 360px;
+  min-height: 520px;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.app { padding: 14px; }
+.hero, .card, .footer {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+  margin-bottom: 12px;
+  padding: 14px;
+}
+.hero { background: linear-gradient(135deg, var(--panel), var(--panel-2)); }
+.eyebrow { color: var(--text-dim); font-size: 12px; margin: 0 0 4px; text-transform: uppercase; letter-spacing: .05em; }
+h1 { font-size: 22px; line-height: 1.15; margin: 0 0 8px; overflow-wrap: anywhere; }
+h2 { font-size: 15px; margin: 0 0 8px; }
+p { margin: 0 0 8px; }
+ul { margin: 8px 0 0; padding-left: 18px; }
+li { margin: 4px 0; overflow-wrap: anywhere; }
+.status { color: var(--accent-2); font-weight: 700; margin: 0; }
+.muted { color: var(--text-dim); }
+.company {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+.company-head { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.company-name { font-weight: 700; overflow-wrap: anywhere; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+details { margin-top: 8px; }
+summary { color: var(--accent); cursor: pointer; }
+a { color: var(--accent); }
+a:focus-visible, summary:focus-visible, button:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; }
+.footer { color: var(--text-dim); font-size: 13px; }
+.footer a { display: inline-block; margin-top: 4px; }
+[hidden] { display: none !important; }

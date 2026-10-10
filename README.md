@@ -1,0 +1,65 @@
+# PrivacyBrew browser extension
+
+PrivacyBrew is a Chrome Manifest V3 prototype for Chrome, Edge, Brave, and Opera. It shows a plain-language privacy report card for the current website.
+
+This prototype detects known trackers, third-party cookie attempts, and some fingerprinting signals. It does not block anything yet. The extension makes no network requests of its own and uses only local data files.
+
+## Load the extension
+
+1. Open `chrome://extensions`.
+2. Turn on developer mode.
+3. Select **Load unpacked**.
+4. Choose the `extension/` folder in this repo.
+5. Open a website and then open the PrivacyBrew toolbar popup.
+
+## Rebuild data
+
+Run:
+
+```sh
+python3 tools/build_data.py
+```
+
+The script downloads data files only at build time. It writes generated JSON to `extension/data/` and records sources in `extension/data/SOURCES.md`.
+
+## Run tests
+
+Run:
+
+```sh
+python3 tools/run_tests.py
+```
+
+The test runner starts local HTTP servers and headless Chrome. It maps test host names to `127.0.0.1`, so tracker test requests do not go to the real internet.
+
+## Report labels
+
+PrivacyBrew counts distinct tracker companies seen on the page.
+
+- 0 to 2 companies: Little tracking found.
+- 3 to 5 companies: Some tracking.
+- 6 or more companies: A lot of tracking.
+- Fingerprinting pushes the label up one level.
+
+## Fingerprinting signals
+
+The content script watches these browser APIs without changing results:
+
+- Canvas readout through `toDataURL`, `toBlob`, or `getImageData`.
+- WebGL graphics card readout through debug renderer APIs.
+- Audio readout through `OfflineAudioContext.startRendering`.
+- Font probing after 20 distinct measured font families.
+
+Tiny canvases under 16 by 16 pixels are ignored. Small icons and layout checks can otherwise create false positives.
+
+## Limits
+
+PrivacyBrew finds known trackers only. It can miss new companies, hidden redirects, or tracking that does not use the watched APIs. It does not block requests, set a GPC header, clear cookies, or stop fingerprinting yet.
+
+## Future work
+
+- Add blocking with `declarativeNetRequest`.
+- Add a Global Privacy Control header.
+- Add cookie controls.
+- Add stronger fingerprint protection.
+- Add user settings and report history.

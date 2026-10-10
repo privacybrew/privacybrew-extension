@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PrivacyBrew</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="app" aria-live="polite">
+    <header class="hero">
+      <p class="eyebrow">PrivacyBrew report card</p>
+      <h1 id="siteName">This website</h1>
+      <p id="overall" class="status">Loading report</p>
+    </header>
+
+    <section class="card" id="messageCard" hidden>
+      <h2 id="messageTitle">PrivacyBrew cannot check this page.</h2>
+      <p id="messageText">Open a website and reload it to check it.</p>
+    </section>
+
+    <section class="card" id="trackersCard">
+      <h2>Companies that see your visit</h2>
+      <p id="trackerSummary" class="muted">No known tracker companies found.</p>
+      <div id="trackers"></div>
+    </section>
+
+    <section class="card">
+      <h2>Other websites contacted</h2>
+      <p><span id="unknownCount">0</span> third-party domains. Not on our tracker list.</p>
+      <details id="unknownDetails">
+        <summary>Show details</summary>
+        <ul id="unknownList"></ul>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>Third-party cookies</h2>
+      <p><span id="cookieCount">0</span> third-party responses tried to set a cookie.</p>
+      <p class="muted">A cookie can help a company remember this browser.</p>
+      <ul id="cookieList"></ul>
+    </section>
+
+    <section class="card">
+      <h2>Fingerprinting</h2>
+      <p id="fingerprintSummary">No fingerprinting signals found.</p>
+      <p class="muted">Fingerprinting can identify your browser without a cookie.</p>
+      <ul id="fingerprintList"></ul>
+    </section>
+
+    <footer class="footer">
+      <p>PrivacyBrew finds known trackers only.</p>
+      <p>It does not block anything yet.</p>
+      <p>Some companies can be missing from this report.</p>
+      <a id="checkLink" href="https://privacybrew.app/check.html" target="_blank" rel="noreferrer">Check your browser's privacy</a>
+    </footer>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
