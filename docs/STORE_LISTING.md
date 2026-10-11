@@ -21,6 +21,7 @@ What you get:
 - Tracker and ad blocking, on by default. Turn it off for one website if it breaks.
 - Cookie pop-up handling that tries to reject optional cookies.
 - A "do not sell my data" request (Global Privacy Control) to every website.
+- Optional Do Not Track requests for people who want them.
 
 What PrivacyBrew does not do:
 - It does not send your data anywhere. All checks run in your browser.

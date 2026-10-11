@@ -172,3 +172,7 @@ button[aria-pressed="true"] {
 }
 
 .italic { font-style: italic; }
+
+.settings-subhead { margin: 12px 0 4px; font-size: 13px; color: var(--text-dim); }
+.setting-row-stacked { align-items: flex-start; }
+.setting-help { margin: 3px 0 0; color: var(--text-dim); font-size: 12px; }

@@ -131,6 +131,11 @@
         "id": "gpc_headers",
         "enabled": true,
         "path": "rules/gpc_headers.json"
+      },
+      {
+        "id": "dnt_headers",
+        "enabled": false,
+        "path": "rules/dnt_headers.json"
       }
     ]
   },

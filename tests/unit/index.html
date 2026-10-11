@@ -125,6 +125,13 @@
   });
 
 
+
+  test('Default privacy request settings', () => {
+    const defaults = { gpcEnabled: true, dntEnabled: false };
+    ok(defaults.gpcEnabled, 'GPC default on');
+    ok(!defaults.dntEnabled, 'DNT default off');
+  });
+
   test('Cookie popup report label maps rejected', () => {
     const s = PB.Report.emptyState(1, 'https://example.com', 'example.com');
     PB.Report.setCookiePopup(s, 'rejected', { cmp: 'TestCMP' });

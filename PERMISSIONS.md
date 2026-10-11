@@ -16,11 +16,11 @@ PrivacyBrew stores per-tab reports in `chrome.storage.session`. It stores blocki
 
 ## `declarativeNetRequest`
 
-PrivacyBrew blocks known tracker and ad requests with static rules. It also sends the `Sec-GPC: 1` header when the GPC setting is on. PrivacyBrew counts blocked ads with `webRequest.onErrorOccurred` and a local EasyList index, so it does not need `declarativeNetRequestFeedback`.
+PrivacyBrew blocks known tracker and ad requests with static rules. It also sends the `Sec-GPC: 1` header when GPC is on and `DNT: 1` when DNT is on. PrivacyBrew counts blocked ads with `webRequest.onErrorOccurred` and a local EasyList index, so it does not need `declarativeNetRequestFeedback`.
 
 ## `scripting`
 
-PrivacyBrew registers or removes one small main-world content script for GPC. It also uses scripting for selected cookie pop-up rules that need page-world checks. These scripts run only in the sender tab and frame.
+PrivacyBrew registers or removes small main-world content scripts for GPC and DNT. It also uses scripting for selected cookie pop-up rules that need page-world checks. These scripts run only in the sender tab and frame.
 
 ## Host permissions: `<all_urls>`
 

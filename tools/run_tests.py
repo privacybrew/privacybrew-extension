@@ -26,7 +26,7 @@ class TestHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         host = self.headers.get('Host', '').split(':')[0]
         path = urlparse(self.path).path
-        HEADER_LOG.append({'host': host, 'path': path, 'secGpc': self.headers.get('Sec-GPC')})
+        HEADER_LOG.append({'host': host, 'path': path, 'secGpc': self.headers.get('Sec-GPC'), 'dnt': self.headers.get('DNT')})
         if path.startswith('/extension/') or path.startswith('/tests/'):
             file_path = ROOT / path.lstrip('/')
             if file_path.is_file():
@@ -49,6 +49,11 @@ class TestHandler(http.server.BaseHTTPRequestHandler):
 <div id="ADbox">Ad box</div><div id="normalBox">Normal box</div>
 <h1>Tracker page</h1>'''
             return self.end(body)
+        if host == 'site.test' and path == '/dnt.html':
+            body = f'''<!doctype html><title>DNT page</title><script src="http://site.test:{PORT}/dnt-sub.js"></script><iframe id="dntFrame" src="http://site.test:{PORT}/dnt-frame.html"></iframe><h1>DNT page</h1>'''
+            return self.end(body)
+        if host == 'site.test' and path == '/dnt-frame.html':
+            return self.end('<!doctype html><title>DNT frame</title><h1>DNT frame</h1>')
         if host == 'site.test' and path == '/cookiebot.html':
             body = '''<!doctype html><title>Cookiebot fixture</title><div id="cbPopupWrap" class="cb-popup--open" style="position:fixed;inset:20px;background:white;color:black;z-index:9999"><p>Cookie consent</p><button id="cbAcceptTrigger" onclick="window.__acceptClicked=true;document.cookie='cbDataAccepted=0; path=/';">Accept</button><button id="cbRefuseTrigger" onclick="window.__rejectClicked=true;document.cookie='cbDataAccepted=1; path=/';this.closest('#cbPopupWrap').style.display='none';">Reject</button></div><h1>Cookiebot</h1>'''
             return self.end(body)
@@ -75,7 +80,9 @@ class TestHandler(http.server.BaseHTTPRequestHandler):
             headers = {}
             if host == 'static.doubleclick.net' or host == 'cdn.some-unknown-thirdparty.example':
                 headers['Set-Cookie'] = 'pbtest=1; SameSite=None'
-            if host == 'site.test' and path == '/fp.js':
+            if host == 'site.test' and path == '/dnt-sub.js':
+                body = 'window.__pbDntSubRan = true;'
+            elif host == 'site.test' and path == '/fp.js':
                 body = '''
 (() => {
   const canvas = document.createElement('canvas'); canvas.width = 32; canvas.height = 32;
@@ -357,6 +364,25 @@ def run_e2e(cdp):
     checks.append(('no GPC script when off', len(eval_value(cdp, sw_session, "chrome.scripting.getRegisteredContentScripts({ids:['privacybrew-gpc-main']})")) == 0))
     cdp.call('Runtime.evaluate', {'expression': "setGpc(true)", 'awaitPromise': True}, sw_session)
     checks.append(('one GPC script when on again', len(eval_value(cdp, sw_session, "chrome.scripting.getRegisteredContentScripts({ids:['privacybrew-gpc-main']})")) == 1))
+    cdp.call('Runtime.evaluate', {'expression': "setDnt(false)", 'awaitPromise': True}, sw_session)
+    before = len(HEADER_LOG)
+    dnt_off_target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
+    dnt_off_session = attach_target(cdp, dnt_off_target)
+    navigate_and_wait(cdp, dnt_off_session, f'http://site.test:{PORT}/dnt.html')
+    dnt_off_headers = HEADER_LOG[before:]
+    checks.append(('DNT off sends no header', not any(item.get('dnt') == '1' for item in dnt_off_headers)))
+    checks.append(('DNT off navigator not one', eval_value(cdp, dnt_off_session, 'navigator.doNotTrack') != '1'))
+    cdp.call('Runtime.evaluate', {'expression': "Promise.all([setDnt(true), setDnt(false), setDnt(true)])", 'awaitPromise': True}, sw_session)
+    checks.append(('one DNT script when on', len(eval_value(cdp, sw_session, "chrome.scripting.getRegisteredContentScripts({ids:['privacybrew-dnt-main']})")) == 1))
+    before = len(HEADER_LOG)
+    dnt_on_target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
+    dnt_on_session = attach_target(cdp, dnt_on_target)
+    navigate_and_wait(cdp, dnt_on_session, f'http://site.test:{PORT}/dnt.html')
+    dnt_on_headers = HEADER_LOG[before:]
+    checks.append(('DNT on sends document and subresource headers', any(item.get('path') == '/dnt.html' and item.get('dnt') == '1' for item in dnt_on_headers) and any(item.get('path') == '/dnt-sub.js' and item.get('dnt') == '1' for item in dnt_on_headers)))
+    checks.append(('DNT on navigator top and iframe', eval_value(cdp, dnt_on_session, "navigator.doNotTrack === '1' && document.querySelector('#dntFrame').contentWindow.navigator.doNotTrack === '1'") is True))
+    cdp.call('Runtime.evaluate', {'expression': "setDnt(false)", 'awaitPromise': True}, sw_session)
+    checks.append(('no DNT script when off again', len(eval_value(cdp, sw_session, "chrome.scripting.getRegisteredContentScripts({ids:['privacybrew-dnt-main']})")) == 0))
     ac_config = eval_value(cdp, sw_session, 'autoconsentConfig(true)')
     checks.append(('autoconsent config opt out', ac_config.get('autoAction') == 'optOut'))
     checks.append(('autoconsent config never opt in', ac_config.get('autoAction') != 'optIn'))

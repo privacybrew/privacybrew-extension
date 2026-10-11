@@ -101,9 +101,20 @@
         <span>Handle cookie pop-ups</span>
         <button id="cookiePopupToggle" type="button" aria-pressed="true">On</button>
       </div>
-      <div class="setting-row">
-        <span>Ask websites not to sell my data</span>
+      <h3 class="settings-subhead">Privacy requests to websites</h3>
+      <div class="setting-row setting-row-stacked">
+        <div>
+          <span>Do not sell or share my data (GPC)</span>
+          <p class="setting-help">Some US states require websites to obey this.</p>
+        </div>
         <button id="gpcToggle" type="button" aria-pressed="true">On</button>
+      </div>
+      <div class="setting-row setting-row-stacked">
+        <div>
+          <span>Do not track (DNT)</span>
+          <p class="setting-help">Most websites ignore this. It can make your browser easier to identify.</p>
+        </div>
+        <button id="dntToggle" type="button" aria-pressed="false">Off</button>
       </div>
       <div id="reloadHint" class="reload-hint" hidden>
         <p>Reload the page to see the change.</p>

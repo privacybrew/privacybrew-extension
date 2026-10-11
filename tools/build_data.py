@@ -420,6 +420,17 @@ def build_rules(disconnect_data, easylist_text=None):
     }]
     used_ids.add(next_id)
     (rules_dir / 'gpc_headers.json').write_text(json.dumps(gpc_rule, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
+    dnt_rule = [{
+        'id': next_id + 1,
+        'priority': 1,
+        'action': {
+            'type': 'modifyHeaders',
+            'requestHeaders': [{ 'header': 'DNT', 'operation': 'set', 'value': '1' }]
+        },
+        'condition': { 'resourceTypes': RESOURCE_TYPES_ALL }
+    }]
+    used_ids.add(next_id + 1)
+    (rules_dir / 'dnt_headers.json').write_text(json.dumps(dnt_rule, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
     metadata = {
         'generatedAt': datetime.now(timezone.utc).date().isoformat(),
         'blockedCategories': BLOCKED_CATEGORIES,
@@ -427,8 +438,8 @@ def build_rules(disconnect_data, easylist_text=None):
         'counts': counts,
         'totalBlockRules': sum(counts.values()),
         'sameCompanyAllowRules': len(allow_rules),
-        'totalStaticRules': sum(counts.values()) + len(allow_rules) + 1,
-        'totalStaticRulesWithEasyList': sum(counts.values()) + len(allow_rules) + 1 + ((easy_meta or {}).get('networkRules', 0)),
+        'totalStaticRules': sum(counts.values()) + len(allow_rules) + 2,
+        'totalStaticRulesWithEasyList': sum(counts.values()) + len(allow_rules) + 2 + ((easy_meta or {}).get('networkRules', 0)),
         'staticRuleCap': STATIC_RULE_CAP,
         'uniqueRuleIds': len(used_ids),
         'limitNote': 'Chrome allows at least 30000 static DNR rules for one extension. This prototype stays below that limit.',

@@ -6,7 +6,9 @@ const supportedProtocols = new Set(['http:', 'https:']);
 const AD_RULESETS = ['ads_easylist'];
 const BLOCK_RULESETS = ['allow_same_company', 'block_advertising', 'block_analytics', 'block_social', 'block_fingerprinting', 'block_cryptomining'];
 const GPC_RULESET = 'gpc_headers';
+const DNT_RULESET = 'dnt_headers';
 const GPC_SCRIPT_ID = 'privacybrew-gpc-main';
+const DNT_SCRIPT_ID = 'privacybrew-dnt-main';
 let cosmeticData = null;
 let adIndexData = null;
 let autoconsentRules = null;
@@ -85,12 +87,13 @@ function siteDomainFor(url) {
 }
 
 async function getSettings() {
-  const stored = await chrome.storage.local.get({ blockingEnabled: true, adBlockingEnabled: true, cookiePopupEnabled: true, gpcEnabled: true, pausedSites: {} });
+  const stored = await chrome.storage.local.get({ blockingEnabled: true, adBlockingEnabled: true, cookiePopupEnabled: true, gpcEnabled: true, dntEnabled: false, pausedSites: {} });
   return {
     blockingEnabled: stored.blockingEnabled !== false,
     adBlockingEnabled: stored.adBlockingEnabled !== false,
     cookiePopupEnabled: stored.cookiePopupEnabled !== false,
     gpcEnabled: stored.gpcEnabled !== false,
+    dntEnabled: stored.dntEnabled === true,
     pausedSites: stored.pausedSites || {}
   };
 }
@@ -125,31 +128,40 @@ async function applyRulesetSettings(settings) {
   else disableRulesetIds.push(...AD_RULESETS);
   if (settings.gpcEnabled) enableRulesetIds.push(GPC_RULESET);
   else disableRulesetIds.push(GPC_RULESET);
+  if (settings.dntEnabled) enableRulesetIds.push(DNT_RULESET);
+  else disableRulesetIds.push(DNT_RULESET);
   await chrome.declarativeNetRequest.updateEnabledRulesets({ enableRulesetIds, disableRulesetIds });
   await applyPauseRules(settings.pausedSites);
 }
 
-async function applyGpcScript(enabled) {
-  const registered = await chrome.scripting.getRegisteredContentScripts({ ids: [GPC_SCRIPT_ID] });
+async function applyMainWorldScript(scriptId, scriptFile, enabled) {
+  const registered = await chrome.scripting.getRegisteredContentScripts({ ids: [scriptId] });
   const isRegistered = registered.length > 0;
   if (enabled && !isRegistered) {
     try {
       await chrome.scripting.registerContentScripts([{
-        id: GPC_SCRIPT_ID,
+        id: scriptId,
         matches: ['<all_urls>'],
-        js: ['gpc-main.js'],
+        js: [scriptFile],
         runAt: 'document_start',
         allFrames: true,
         matchOriginAsFallback: true,
         world: 'MAIN'
       }]);
     } catch (error) {
-      // Another update registered it first. That is the state we want.
       if (!String(error && error.message).includes('Duplicate script ID')) throw error;
     }
   } else if (!enabled && isRegistered) {
-    await chrome.scripting.unregisterContentScripts({ ids: [GPC_SCRIPT_ID] });
+    await chrome.scripting.unregisterContentScripts({ ids: [scriptId] });
   }
+}
+
+async function applyGpcScript(enabled) {
+  return applyMainWorldScript(GPC_SCRIPT_ID, 'gpc-main.js', enabled);
+}
+
+async function applyDntScript(enabled) {
+  return applyMainWorldScript(DNT_SCRIPT_ID, 'dnt-main.js', enabled);
 }
 
 // Runs one settings update at a time. On install or reload, Chrome can start
@@ -162,6 +174,7 @@ function applySettings() {
     const settings = await getSettings();
     await applyRulesetSettings(settings);
     await applyGpcScript(settings.gpcEnabled);
+    await applyDntScript(settings.dntEnabled);
     return settings;
   });
   settingsQueue = run.catch(() => {});
@@ -427,6 +440,11 @@ async function setCookiePopupHandling(enabled) {
   return applySettings();
 }
 
+async function setDnt(enabled) {
+  await chrome.storage.local.set({ dntEnabled: Boolean(enabled) });
+  return applySettings();
+}
+
 async function setGpc(enabled) {
   await chrome.storage.local.set({ gpcEnabled: Boolean(enabled) });
   return applySettings();
@@ -642,6 +660,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message && message.type === 'setCookiePopupHandling') {
       sendResponse({ ok: true, settings: await setCookiePopupHandling(message.enabled) });
+      return;
+    }
+    if (message && message.type === 'setDnt') {
+      sendResponse({ ok: true, settings: await setDnt(message.enabled) });
       return;
     }
     if (message && message.type === 'setGpc') {

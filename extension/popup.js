@@ -92,13 +92,14 @@
   }
 
   function renderControls(report) {
-    const settings = report.settings || { blockingEnabled: true, adBlockingEnabled: true, cookiePopupEnabled: true, gpcEnabled: true, pausedSites: {} };
+    const settings = report.settings || { blockingEnabled: true, adBlockingEnabled: true, cookiePopupEnabled: true, gpcEnabled: true, dntEnabled: false, pausedSites: {} };
     const siteOn = settings.blockingEnabled && !report.sitePaused;
     setToggle($('siteBlockToggle'), siteOn);
     setToggle($('globalBlockToggle'), settings.blockingEnabled);
     setToggle($('adBlockToggle'), settings.blockingEnabled && settings.adBlockingEnabled);
     setToggle($('cookiePopupToggle'), settings.cookiePopupEnabled && !report.sitePaused);
     setToggle($('gpcToggle'), settings.gpcEnabled);
+    setToggle($('dntToggle'), settings.dntEnabled);
     $('controlsCard').hidden = report.status !== 'ok';
   }
 
@@ -205,6 +206,12 @@
     $('cookiePopupToggle').addEventListener('click', async () => {
       const enabled = !(currentReport && currentReport.settings && currentReport.settings.cookiePopupEnabled);
       await chrome.runtime.sendMessage({ type: 'setCookiePopupHandling', enabled });
+      showReloadHint();
+      await refresh();
+    });
+    $('dntToggle').addEventListener('click', async () => {
+      const enabled = !(currentReport && currentReport.settings && currentReport.settings.dntEnabled);
+      await chrome.runtime.sendMessage({ type: 'setDnt', enabled });
       showReloadHint();
       await refresh();
     });

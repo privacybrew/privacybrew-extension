@@ -63,6 +63,8 @@ Cookie pop-up handling is on by default. PrivacyBrew tries to reject optional co
 
 The GPC setting is on by default. It sends `Sec-GPC: 1` with browser requests. It also sets `navigator.globalPrivacyControl` to true in page scripts.
 
+The DNT setting is off by default. If you turn it on, PrivacyBrew sends `DNT: 1` and sets `navigator.doNotTrack` to `1`. Website pause and global blocking do not turn off GPC or DNT because they are privacy requests, not blocking rules.
+
 PrivacyBrew uses a dynamic main-world content script for this setting. This avoids a first-load race after you turn GPC off or on.
 
 ## Report labels
