@@ -116,6 +116,12 @@ def popup(cdp, ext, sw, tab_id, scroll=None, details=False, crop_top=False):
         return img.crop((0, 0, img.width, min(img.height, 1225)))
     return img
 
+def popup_element(cdp, ext, tab_id, selector):
+    target=cdp.call('Target.createTarget', {'url': f'chrome-extension://{ext}/popup.html?tabId={tab_id}'})['targetId']; sess=attach(cdp,target); cdp.call('Page.enable', sessionId=sess); cdp.call('Emulation.setDeviceMetricsOverride', {'width':390,'height':900,'deviceScaleFactor':2,'mobile':False}, sess); wait(cdp,sess); time.sleep(.6)
+    box=cdp.call('Runtime.evaluate', {'expression': f"(()=>{{const r=document.querySelector('{selector}').getBoundingClientRect();return [r.x,r.y+scrollY,r.width,r.height]}})()", 'returnByValue':True}, sess)['result']['value']
+    data=cdp.call('Page.captureScreenshot', {'format':'png','captureBeyondViewport':True,'clip':{'x':box[0],'y':box[1],'width':box[2],'height':box[3],'scale':1}}, sess)['data']
+    tmp = ROOT/'artifacts'/'tmp-shot.png'; tmp.write_bytes(base64.b64decode(data)); return Image.open(tmp).convert('RGBA')
+
 def bg():
     im=Image.new('RGBA',(1280,800),BG); glow=Image.new('RGBA',(1280,800),(0,0,0,0)); d=ImageDraw.Draw(glow); d.ellipse((520,-220,1450,620), fill=(155,109,209,72)); return Image.alpha_composite(im, glow.filter(ImageFilter.GaussianBlur(70)))
 def draw_wrapped(d, xy, text, font, fill, width, linegap=8):
@@ -135,10 +141,15 @@ def frame(base,img,xy,size):
     d=ImageDraw.Draw(base); d.rounded_rectangle((x,y,x+w,y+h),24,fill=PANEL,outline=BORDER,width=3); img.thumbnail((w-28,h-28), Image.Resampling.LANCZOS); base.alpha_composite(img,(x+14,y+14))
 def slide(path,title,body,img):
     im=bg(); d=ImageDraw.Draw(im); draw_wrapped(d,(70,135),title,FONT_BIG,TEXT,620); draw_wrapped(d,(74,270),body,FONT,DIM,610); frame(im,img,(790,85),(390,630)); im.convert('RGB').save(path)
-def cookie_slide(path,before,after,popup_img):
-    popup_img = popup_img.crop((0, 0, popup_img.width, min(popup_img.height, 520)))
-    im=bg(); d=ImageDraw.Draw(im); draw_wrapped(d,(70,48),'Cookie pop-up help',FONT_BIG,TEXT,780); draw_wrapped(d,(72,118),'PrivacyBrew tries to reject optional cookies. It never clicks accept all.',FONT,DIM,900)
-    d.text((135,180),'Before',font=FONT_MED,fill=TEXT); d.text((705,180),'After',font=FONT_MED,fill=TEXT); frame(im,before,(70,225),(500,355)); frame(im,after,(650,225),(500,355)); frame(im,popup_img,(850,575),(300,200)); im.convert('RGB').save(path)
+def cookie_slide(path,before,after,card):
+    im=bg(); d=ImageDraw.Draw(im); draw_wrapped(d,(70,44),'Cookie pop-up help',FONT_BIG,TEXT,1100); draw_wrapped(d,(72,114),'PrivacyBrew rejects optional cookies for you. It never selects Accept all.',FONT,DIM,1140)
+    d.text((70,176),'Before',font=FONT_MED,fill=TEXT); d.text((670,176),'After',font=FONT_MED,fill=TEXT)
+    # page shots are 900x620; frame inner size keeps that ratio so no empty strip shows
+    frame(im,before,(70,222),(540,372)); frame(im,after,(670,222),(540,372))
+    d.text((70,628),'Without PrivacyBrew:',font=FONT_MED,fill=DIM); d.text((70,676),'the banner asks you to choose.',font=FONT,fill=DIM)
+    d.text((670,628),'With PrivacyBrew:',font=FONT_MED,fill=TEXT)
+    d.text((670,676),'it selected Reject for you.',font=FONT,fill=DIM)
+    im.convert('RGB').save(path)
 def local(path):
     im=bg(); d=ImageDraw.Draw(im); icon=Image.open(ROOT/'extension/icons/icon-128.png').convert('RGBA').resize((120,120)); im.alpha_composite(icon,(90,90)); d.text((240,112),'Local by design',font=FONT_BIG,fill=TEXT)
     y=270
@@ -157,8 +168,14 @@ def main():
         cdp.call('Runtime.evaluate', {'expression':'setCookiePopupHandling(false)', 'awaitPromise':True}, sw)
         before_s=open_page(cdp,f'http://shop.example:{PORT}/'); before=shot(cdp,before_s)
         cdp.call('Runtime.evaluate', {'expression':'setCookiePopupHandling(true)', 'awaitPromise':True}, sw)
-        after_s=open_page(cdp,f'http://shop.example:{PORT}/'); time.sleep(1); cdp.call('Runtime.evaluate', {'expression':"const b=document.querySelector('.banner'); if(b) b.style.display='none';"}, after_s); after=shot(cdp,after_s)
-        shop_tab=tab_id_for_url(cdp,sw,'http://shop.example'); create_state(cdp,sw,shop_tab,'shop.example','rejected'); cookie_popup=popup(cdp,ext,sw,shop_tab,scroll='#cookiesCard')
+        after_s=open_page(cdp,f'http://shop.example:{PORT}/'); time.sleep(4)
+        # The extension must handle the banner itself. Stop if it did not.
+        seen=cdp.call('Runtime.evaluate', {'expression':"JSON.stringify({rejected:!!window.__rejectClicked, accepted:!!window.__acceptClicked, visible:(()=>{const b=document.querySelector('.banner');return !!b && getComputedStyle(b).display!=='none' && b.offsetHeight>0})()})", 'returnByValue':True}, after_s)['result']['value']
+        print('after banner state:', seen)
+        st=json.loads(seen)
+        if st['accepted'] or st['visible']: raise SystemExit('Extension did not handle the fixture banner: '+seen)
+        after=shot(cdp,after_s)
+        shop_tab=tab_id_for_url(cdp,sw,'http://shop.example'); create_state(cdp,sw,shop_tab,'shop.example','rejected'); cookie_popup=popup_element(cdp,ext,shop_tab,'#cookiesCard')
         slide(OUT/'01-report-card.png','See the privacy story','A plain-language report card for each website.\nTrackers, ads, cookies, and fingerprinting in one place.',report)
         slide(OUT/'02-blocking-controls.png','Control each protection','Block trackers and ads by default.\nSend privacy requests to websites.',controls)
         cookie_slide(OUT/'03-cookie-popups.png',before,after,cookie_popup)
