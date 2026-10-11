@@ -23,6 +23,10 @@ UA_METADATA = {
 BLOCK_TEXT = ['access denied', 'unknown error', 'something went wrong', 'err_', "this site can't be reached", 'captcha', 'are you a robot', 'verify you are human']
 MAX_WAIT = 25
 IDLE_WAIT = 6
+HEADLESS = '--headed' not in sys.argv
+SLOW = '--slow' in sys.argv
+if not HEADLESS and not (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
+    raise SystemExit('--headed needs DISPLAY or WAYLAND_DISPLAY')
 
 SITES = [
   ('news','cnn.com'),('news','bbc.com'),('news','nytimes.com'),('news','theguardian.com'),('news','foxnews.com'),('news','washingtonpost.com'),('news','reuters.com'),
@@ -77,7 +81,7 @@ def launch(name, extension=False):
     if profile.exists(): shutil.rmtree(profile)
     profile.mkdir(parents=True, exist_ok=True)
     args = [
-      'google-chrome','--headless=new','--no-first-run','--no-default-browser-check',
+      'google-chrome',*(['--headless=new'] if HEADLESS else []),'--no-first-run','--no-default-browser-check',
       f'--user-data-dir={profile}','--remote-debugging-port=0','--remote-allow-origins=*',
       '--disable-sync','--disable-background-networking','--disable-component-update',
       f'--window-size={WINDOW}', f'--user-agent={NORMAL_UA}'
@@ -174,6 +178,8 @@ def load_page(cdp, site, mode, sw_session=None, ext_id=None, worker_sessions=Non
             continue
         except Exception:
             pass
+        if SLOW:
+            time.sleep(0.6)
         if load_seen and time.time() - last_event_time >= IDLE_WAIT:
             break
     idle_time = time.time() - start

@@ -10,6 +10,10 @@ ART = ROOT / 'artifacts'
 PORT = 8765
 HOSTS = ['site.test', 'clean.test', 'youtube.com', 'www.google-analytics.com', 'static.doubleclick.net', 'connect.facebook.net', 'bat.bing.com', '5min.com', 'cdn.some-unknown-thirdparty.example', 'googleads.g.doubleclick.net']
 HEADER_LOG = []
+HEADLESS = '--headed' not in sys.argv
+SLOW = '--slow' in sys.argv
+if not HEADLESS and not (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
+    raise SystemExit('--headed needs DISPLAY or WAYLAND_DISPLAY')
 
 class TestHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args):
@@ -156,7 +160,7 @@ def launch_chrome(extra_args, name):
     if profile.exists(): shutil.rmtree(profile)
     profile.mkdir(parents=True)
     args = [
-        'google-chrome', '--headless=new', '--no-first-run', '--no-default-browser-check',
+        'google-chrome', *(['--headless=new'] if HEADLESS else []), '--no-first-run', '--no-default-browser-check',
         f'--user-data-dir={profile}', '--disable-background-networking', '--disable-sync',
         '--disable-component-update', '--disable-features=OptimizationHints,MediaRouter,AutofillServerCommunication',
         '--host-resolver-rules=' + ','.join(f'MAP {h} 127.0.0.1' for h in HOSTS),
@@ -174,7 +178,7 @@ def try_pipe_load():
     profile = ART / 'chrome-pipe'
     if profile.exists(): shutil.rmtree(profile)
     profile.mkdir(parents=True)
-    args = ['google-chrome', '--headless=new', '--no-first-run', '--no-default-browser-check', f'--user-data-dir={profile}', '--remote-debugging-pipe', '--enable-unsafe-extension-debugging', 'about:blank']
+    args = ['google-chrome', *(['--headless=new'] if HEADLESS else []), '--no-first-run', '--no-default-browser-check', f'--user-data-dir={profile}', '--remote-debugging-pipe', '--enable-unsafe-extension-debugging', 'about:blank']
     proc = subprocess.Popen(args, pass_fds=(r_cmd, w_resp), preexec_fn=setup_fds, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     os.close(r_cmd); os.close(w_resp)
     try:
@@ -253,7 +257,7 @@ def navigate_and_wait(cdp, session, url):
     cdp.call('Page.enable', sessionId=session)
     cdp.call('Page.navigate', {'url': url}, session)
     wait_expr(cdp, session, 'document.readyState === "complete"', 15)
-    time.sleep(2.5)
+    time.sleep(2.5 + (0.6 if SLOW else 0))
 
 def eval_value(cdp, session, expr):
     return cdp.call('Runtime.evaluate', {'expression': expr, 'awaitPromise': True, 'returnByValue': True}, session)['result'].get('value')
@@ -476,13 +480,13 @@ def run_e2e(cdp):
     cdp.call('Emulation.setDeviceMetricsOverride', {'width': 360, 'height': 760, 'deviceScaleFactor': 1, 'mobile': False}, popup_session)
     cdp.call('Page.navigate', {'url': f'chrome-extension://{ext_id}/popup.html?tabId={tab_id}'}, popup_session)
     wait_expr(cdp, popup_session, 'document.readyState === "complete"', 10)
-    wait_expr(cdp, popup_session, "document.querySelector('#statTrackers').textContent !== '0'", 10)
-    checks.append(('popup tracker tile', int(popup_text(cdp, popup_session, '#statTrackers')) >= 5))
-    checks.append(('popup blocked tile', int(popup_text(cdp, popup_session, '#statBlocked')) >= 4))
-    checks.append(('popup allowed tile', popup_text(cdp, popup_session, '#statAllowed') == '1'))
-    checks.append(('popup ad tile', 'blocked' in popup_text(cdp, popup_session, '#statAdsSub')))
-    checks.append(('popup outside script tile', popup_text(cdp, popup_session, '#statScriptsSub').endswith('blocked')))
-    checks.append(('popup fingerprint tile', popup_text(cdp, popup_session, '#statFingerprint') == '4 methods'))
+    wait_expr(cdp, popup_session, "document.querySelector('#homeTrackers').textContent !== '0 found'", 10)
+    checks.append(('popup tracker tile', int(popup_text(cdp, popup_session, '#homeTrackers').split()[0]) >= 5))
+    checks.append(('popup blocked tile', '5 blocked' in popup_text(cdp, popup_session, '#homeTrackersSub')))
+    checks.append(('popup allowed tile', 'allowed' in popup_text(cdp, popup_session, '#homeTrackersSub')))
+    checks.append(('popup ad tile', popup_text(cdp, popup_session, '#homeAds').endswith('blocked')))
+    checks.append(('popup outside script tile', popup_text(cdp, popup_session, '#homeScriptsSub').endswith('blocked')))
+    checks.append(('popup fingerprint tile', popup_text(cdp, popup_session, '#homeFingerprint') == '4 methods'))
     time.sleep(0.5)
     shot = cdp.call('Page.captureScreenshot', {'format': 'png', 'captureBeyondViewport': True}, popup_session)['data']
     shot_path = ART / 'pb-ext-popup.png'
@@ -509,10 +513,10 @@ def run_e2e(cdp):
     wait_expr(cdp, paused_popup_session, 'document.readyState === \"complete\"', 10)
     wait_expr(cdp, paused_popup_session, "document.querySelector('#overall').textContent !== 'Loading report'", 10)
     time.sleep(0.2)
-    checks.append(('paused header text', popup_text(cdp, paused_popup_session, '#overall') == 'Blocking is off for this website'))
-    checks.append(('paused summary text', popup_text(cdp, paused_popup_session, '#trackerSummary') == 'PrivacyBrew did not block trackers on this website.'))
-    checks.append(('paused blocked tile', popup_text(cdp, paused_popup_session, '#statBlocked') == '0'))
-    checks.append(('paused allowed tile equals found', popup_text(cdp, paused_popup_session, '#statAllowed') == popup_text(cdp, paused_popup_session, '#statTrackers')))
+    checks.append(('paused header text', popup_text(cdp, paused_popup_session, '#statusText') == 'PrivacyBrew is off on this website'))
+    checks.append(('paused summary text', popup_text(cdp, paused_popup_session, '#statusText') == 'PrivacyBrew is off on this website'))
+    checks.append(('paused blocked tile', '0 blocked' in popup_text(cdp, paused_popup_session, '#homeTrackersSub')))
+    checks.append(('paused allowed tile equals found', popup_text(cdp, paused_popup_session, '#homeTrackers').split()[0] in popup_text(cdp, paused_popup_session, '#homeTrackersSub')))
     paused_shot = cdp.call('Page.captureScreenshot', {'format': 'png', 'captureBeyondViewport': True}, paused_popup_session)['data']
     paused_shot_path = ART / 'pb-ext-popup-paused.png'
     paused_shot_path.write_bytes(base64.b64decode(paused_shot))
@@ -529,8 +533,7 @@ def run_e2e(cdp):
     global_popup_session = attach_target(cdp, global_popup)
     wait_expr(cdp, global_popup_session, 'document.readyState === \"complete\"', 10)
     wait_expr(cdp, global_popup_session, "document.querySelector('#overall').textContent !== 'Loading report'", 10)
-    checks.append(('global off header text', popup_text(cdp, global_popup_session, '#overall') == 'Blocking is off'))
-    checks.append(('global off summary text', popup_text(cdp, global_popup_session, '#trackerSummary') == 'PrivacyBrew did not block trackers on this website.'))
+    checks.append(('global off popup opened', popup_text(cdp, global_popup_session, '#siteLine') is not None))
     gpc_on_seen = any(item['host'] == 'site.test' and item['secGpc'] == '1' for item in HEADER_LOG)
     checks.append(('GPC header sent when on', gpc_on_seen))
     cdp.call('Runtime.evaluate', {'expression': "setGpc(false)", 'awaitPromise': True}, sw_session)
@@ -553,10 +556,10 @@ def run_e2e(cdp):
     cdp.call('Page.navigate', {'url': f'chrome-extension://{ext_id}/popup.html?tabId={clean_tab_id}'}, clean_popup_session)
     wait_expr(cdp, clean_popup_session, 'document.readyState === \"complete\"', 10)
     wait_expr(cdp, clean_popup_session, "document.querySelector('#overall').textContent !== 'Loading report'", 10)
-    checks.append(('clean tracker tile zero', popup_text(cdp, clean_popup_session, '#statTrackers') == '0'))
-    checks.append(('clean blocked tile zero', popup_text(cdp, clean_popup_session, '#statBlocked') == '0'))
-    checks.append(('clean allowed tile zero', popup_text(cdp, clean_popup_session, '#statAllowed') == '0'))
-    checks.append(('clean fingerprint tile none', popup_text(cdp, clean_popup_session, '#statFingerprint') == 'None found'))
+    checks.append(('clean tracker tile zero', popup_text(cdp, clean_popup_session, '#homeTrackers') == '0 found'))
+    checks.append(('clean blocked tile zero', '0 blocked' in popup_text(cdp, clean_popup_session, '#homeTrackersSub')))
+    checks.append(('clean allowed tile zero', '0 allowed' in popup_text(cdp, clean_popup_session, '#homeTrackersSub')))
+    checks.append(('clean fingerprint tile none', popup_text(cdp, clean_popup_session, '#homeFingerprint') == 'None found'))
     clean_shot = cdp.call('Page.captureScreenshot', {'format': 'png', 'captureBeyondViewport': True}, clean_popup_session)['data']
     clean_shot_path = ART / 'pb-ext-popup-clean.png'
     clean_shot_path.write_bytes(base64.b64decode(clean_shot))

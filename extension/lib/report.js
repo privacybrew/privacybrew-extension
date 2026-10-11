@@ -59,6 +59,7 @@
       fingerprints: {},
       outsideScripts: { urls: {}, blockedUrls: {} },
       cookiePopup: { status: 'none', label: 'No pop-up found' },
+      adWall: 'none',
       updatedAt: Date.now()
     };
   }
@@ -168,6 +169,12 @@
     return state;
   }
 
+  function setAdWall(state, status) {
+    state.adWall = status || 'none';
+    state.updatedAt = Date.now();
+    return state;
+  }
+
   function addUnknown(state, domain) {
     if (domain) state.unknownDomains[domain] = true;
     state.updatedAt = Date.now();
@@ -267,6 +274,7 @@
       adBlockedRequestCount,
       adCosmeticMaxMs,
       cookiePopup: state.cookiePopup || { status: 'none', label: 'No pop-up found' },
+      adWall: state.adWall || 'none',
       trackers,
       unknownDomains: Object.keys(state.unknownDomains || {}).sort(),
       cookieDomains: Object.keys(state.cookieDomains || {}).sort(),
@@ -277,5 +285,5 @@
   }
 
   global.PB = global.PB || {};
-  global.PB.Report = { CATEGORY_LINES, CATEGORY_PRIORITY, FINGERPRINT_LABELS, cleanUrl, emptyState, addTracker, setCookiePopup, addAdBlocked, addCosmeticTime, addOutsideScript, addUnknown, addCookie, addFingerprint, overallLabel, orderedCategories, plural, summarize };
+  global.PB.Report = { CATEGORY_LINES, CATEGORY_PRIORITY, FINGERPRINT_LABELS, cleanUrl, emptyState, addTracker, setCookiePopup, setAdWall, addAdBlocked, addCosmeticTime, addOutsideScript, addUnknown, addCookie, addFingerprint, overallLabel, orderedCategories, plural, summarize };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

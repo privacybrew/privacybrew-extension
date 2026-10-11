@@ -10,6 +10,9 @@ EXT = ROOT / 'extension'
 OUT = ROOT / 'store' / 'screenshots'
 PROMO = ROOT / 'store' / 'promo-small-440x280.png'
 PORT = 8876
+HEADLESS = '--headed' not in __import__('sys').argv
+if not HEADLESS and not (__import__('os').environ.get('DISPLAY') or __import__('os').environ.get('WAYLAND_DISPLAY')):
+    raise SystemExit('--headed needs DISPLAY or WAYLAND_DISPLAY')
 HOSTS = ['news.example', 'shop.example', 'www.google-analytics.com', 'static.doubleclick.net', 'connect.facebook.net', 'bat.bing.com', 'googleads.g.doubleclick.net']
 BG = '#120a1a'; PANEL = '#1f1329'; BORDER = '#3a2c4a'; ACC = '#9b6dd1'; GREEN = '#5fae96'; TEXT = '#f0eaf7'; DIM = '#b8a8c9'
 FONT_BIG = ImageFont.truetype('DejaVuSans-Bold.ttf', 54)
@@ -55,7 +58,7 @@ def launch():
     profile = ROOT / 'artifacts' / 'store-screenshot-profile'
     if profile.exists(): shutil.rmtree(profile)
     profile.mkdir(parents=True)
-    args=['google-chrome','--headless=new','--no-first-run','--no-default-browser-check',f'--user-data-dir={profile}','--remote-debugging-port=0','--remote-allow-origins=*','--enable-unsafe-extension-debugging','--window-size=1280,900','--host-resolver-rules='+','.join(f'MAP {h} 127.0.0.1' for h in HOSTS),'about:blank']
+    args=['google-chrome',*(['--headless=new'] if HEADLESS else []),'--no-first-run','--no-default-browser-check',f'--user-data-dir={profile}','--remote-debugging-port=0','--remote-allow-origins=*','--enable-unsafe-extension-debugging','--window-size=1280,900','--host-resolver-rules='+','.join(f'MAP {h} 127.0.0.1' for h in HOSTS),'about:blank']
     proc=subprocess.Popen(args,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
     ws=''; end=time.time()+20
     while time.time()<end:
@@ -104,17 +107,16 @@ PB.Report.addCookie(s, 'static.doubleclick.net'); if ('{cookie}'==='rejected') P
 await chrome.storage.session.set({{['tab:{tab_id}']:s}}); await chrome.action.setBadgeText({{tabId:{tab_id}, text:'3'}});}})()'''
     cdp.call('Runtime.evaluate', {'expression': expr, 'awaitPromise': True}, sw)
 
-def popup(cdp, ext, sw, tab_id, scroll=None, details=False, crop_top=False):
-    target=cdp.call('Target.createTarget', {'url': f'chrome-extension://{ext}/popup.html?tabId={tab_id}'})['targetId']; sess=attach(cdp,target); cdp.call('Page.enable', sessionId=sess); cdp.call('Emulation.setDeviceMetricsOverride', {'width':390,'height':650,'deviceScaleFactor':2,'mobile':False}, sess); wait(cdp,sess); time.sleep(.5)
+def popup(cdp, ext, sw, tab_id, mode='home'):
+    target=cdp.call('Target.createTarget', {'url': f'chrome-extension://{ext}/popup.html?tabId={tab_id}'})['targetId']; sess=attach(cdp,target); cdp.call('Page.enable', sessionId=sess); cdp.call('Emulation.setDeviceMetricsOverride', {'width':390,'height':650,'deviceScaleFactor':2,'mobile':False}, sess); wait(cdp,sess); time.sleep(.6)
     cdp.call('Runtime.evaluate', {'expression': "const st=document.createElement('style');st.textContent='::-webkit-scrollbar{display:none} body{scrollbar-width:none}';document.documentElement.appendChild(st);"}, sess)
-    if details:
-        cdp.call('Runtime.evaluate', {'expression': "document.querySelector('#trackersCard details') && (document.querySelector('#trackersCard details').open=true); document.querySelector('#trackersCard').scrollIntoView();"}, sess); time.sleep(.2)
-    elif scroll:
-        cdp.call('Runtime.evaluate', {'expression': f"document.querySelector('{scroll}').scrollIntoView();"}, sess); time.sleep(.2)
-    img = shot(cdp,sess)
-    if crop_top:
-        return img.crop((0, 0, img.width, min(img.height, 1225)))
-    return img
+    if mode == 'settings':
+        cdp.call('Runtime.evaluate', {'expression': "document.querySelector('#settingsButton').click()"}, sess); time.sleep(.3)
+    elif mode == 'companies':
+        cdp.call('Runtime.evaluate', {'expression': "document.querySelector('[data-detail=trackers]').click(); setTimeout(()=>{const d=document.querySelector('details'); if(d)d.open=true},50);"}, sess); time.sleep(.4)
+    elif mode == 'cookies':
+        cdp.call('Runtime.evaluate', {'expression': "document.querySelector('[data-detail=cookies]').click()"}, sess); time.sleep(.3)
+    return shot(cdp,sess)
 
 def popup_element(cdp, ext, tab_id, selector):
     target=cdp.call('Target.createTarget', {'url': f'chrome-extension://{ext}/popup.html?tabId={tab_id}'})['targetId']; sess=attach(cdp,target); cdp.call('Page.enable', sessionId=sess); cdp.call('Emulation.setDeviceMetricsOverride', {'width':390,'height':900,'deviceScaleFactor':2,'mobile':False}, sess); wait(cdp,sess); time.sleep(.6)
@@ -149,7 +151,7 @@ def cookie_slide(path,before,after,card):
     d.text((70,628),'Without PrivacyBrew:',font=FONT_MED,fill=DIM); d.text((70,676),'the banner asks you to choose.',font=FONT,fill=DIM)
     d.text((670,628),'With PrivacyBrew:',font=FONT_MED,fill=TEXT)
     d.text((670,676),'it selected Reject for you.',font=FONT,fill=DIM)
-    im.convert('RGB').save(path)
+    frame(im,card,(1010,610),(150,130)); im.convert('RGB').save(path)
 def local(path):
     im=bg(); d=ImageDraw.Draw(im); icon=Image.open(ROOT/'extension/icons/icon-128.png').convert('RGBA').resize((120,120)); im.alpha_composite(icon,(90,90)); d.text((240,112),'Local by design',font=FONT_BIG,fill=TEXT)
     y=270
@@ -164,7 +166,7 @@ def main():
     try:
         proc,cdp,ext,sw,profile=launch()
         news=open_page(cdp,f'http://news.example:{PORT}/'); news_tab=tab_id_for_url(cdp,sw,'http://news.example'); create_state(cdp,sw,news_tab)
-        report=popup(cdp,ext,sw,news_tab,crop_top=True); controls=popup(cdp,ext,sw,news_tab,scroll='#controlsCard'); companies=popup(cdp,ext,sw,news_tab,details=True)
+        report=popup(cdp,ext,sw,news_tab,'home'); controls=popup(cdp,ext,sw,news_tab,'settings'); companies=popup(cdp,ext,sw,news_tab,'companies')
         cdp.call('Runtime.evaluate', {'expression':'setCookiePopupHandling(false)', 'awaitPromise':True}, sw)
         before_s=open_page(cdp,f'http://shop.example:{PORT}/'); before=shot(cdp,before_s)
         cdp.call('Runtime.evaluate', {'expression':'setCookiePopupHandling(true)', 'awaitPromise':True}, sw)
@@ -175,7 +177,7 @@ def main():
         st=json.loads(seen)
         if st['accepted'] or st['visible']: raise SystemExit('Extension did not handle the fixture banner: '+seen)
         after=shot(cdp,after_s)
-        shop_tab=tab_id_for_url(cdp,sw,'http://shop.example'); create_state(cdp,sw,shop_tab,'shop.example','rejected'); cookie_popup=popup_element(cdp,ext,shop_tab,'#cookiesCard')
+        shop_tab=tab_id_for_url(cdp,sw,'http://shop.example'); create_state(cdp,sw,shop_tab,'shop.example','rejected'); cookie_popup=popup(cdp,ext,sw,shop_tab,'cookies')
         slide(OUT/'01-report-card.png','See the privacy story','A plain-language report card for each website.\nTrackers, ads, cookies, and fingerprinting in one place.',report)
         slide(OUT/'02-blocking-controls.png','Control each protection','Block trackers and ads by default.\nSend privacy requests to websites.',controls)
         cookie_slide(OUT/'03-cookie-popups.png',before,after,cookie_popup)

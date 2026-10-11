@@ -88,15 +88,24 @@ function siteDomainFor(url) {
 }
 
 async function getSettings() {
-  const stored = await chrome.storage.local.get({ blockingEnabled: true, adBlockingEnabled: true, cookiePopupEnabled: true, gpcEnabled: true, dntEnabled: false, pausedSites: {} });
+  const stored = await chrome.storage.local.get({ blockingEnabled: true, adBlockingEnabled: true, cookiePopupEnabled: true, gpcEnabled: true, dntEnabled: false, pausedSites: {}, globalOff: false, tempOffUntil: 0 });
   return {
     blockingEnabled: stored.blockingEnabled !== false,
     adBlockingEnabled: stored.adBlockingEnabled !== false,
     cookiePopupEnabled: stored.cookiePopupEnabled !== false,
     gpcEnabled: stored.gpcEnabled !== false,
     dntEnabled: stored.dntEnabled === true,
-    pausedSites: stored.pausedSites || {}
+    pausedSites: stored.pausedSites || {},
+    globalOff: stored.globalOff === true,
+    tempOffUntil: stored.tempOffUntil || 0
   };
+}
+
+function isTemporarilyOff(settings) {
+  return settings.tempOffUntil && Date.now() < settings.tempOffUntil;
+}
+function isProtectionOff(settings, siteDomain) {
+  return settings.globalOff || isTemporarilyOff(settings) || Boolean(siteDomain && settings.pausedSites[siteDomain]);
 }
 
 function pauseRuleId(siteDomain) {
@@ -123,9 +132,9 @@ async function applyPauseRules(pausedSites) {
 async function applyRulesetSettings(settings) {
   const enableRulesetIds = [];
   const disableRulesetIds = [];
-  if (settings.blockingEnabled) enableRulesetIds.push(...BLOCK_RULESETS);
+  if (settings.blockingEnabled && !isProtectionOff(settings, null)) enableRulesetIds.push(...BLOCK_RULESETS);
   else disableRulesetIds.push(...BLOCK_RULESETS);
-  if (settings.blockingEnabled && settings.adBlockingEnabled) enableRulesetIds.push(...AD_RULESETS);
+  if (settings.blockingEnabled && settings.adBlockingEnabled && !isProtectionOff(settings, null)) enableRulesetIds.push(...AD_RULESETS);
   else disableRulesetIds.push(...AD_RULESETS);
   if (settings.gpcEnabled) enableRulesetIds.push(GPC_RULESET);
   else disableRulesetIds.push(GPC_RULESET);
@@ -252,8 +261,10 @@ async function saveNow(tabId, state) {
 
 async function updateBadge(tabId, state) {
   const summary = PB.Report.summarize(state || {});
-  await chrome.action.setBadgeBackgroundColor({ tabId, color: '#9b6dd1' });
-  await chrome.action.setBadgeText({ tabId, text: summary.blockedCompanyCount ? String(summary.blockedCompanyCount) : '' });
+  const settings = await getSettings();
+  const off = isProtectionOff(settings, summary.siteDomain);
+  await chrome.action.setBadgeBackgroundColor({ tabId, color: off ? '#9585ad' : '#9b6dd1' });
+  await chrome.action.setBadgeText({ tabId, text: off ? 'off' : (summary.blockedCompanyCount ? String(summary.blockedCompanyCount) : '') });
 }
 
 async function resetTab(tabId, url) {
@@ -297,7 +308,7 @@ async function observeTrackerUrl(tabId, url, status) {
   const match = disconnect.find(requestHost);
   if (match && !disconnect.sameCompanyAsSite(match, state.siteDomain)) {
     const settings = await getSettings();
-    const paused = Boolean(settings.pausedSites[state.siteDomain]);
+    const paused = isProtectionOff(settings, state.siteDomain);
     const blocked = status === 'blocked' && settings.blockingEnabled && !paused;
     PB.Report.addTracker(state, match, requestHost, blocked ? 'blocked' : 'allowed', url);
   } else if (!match) {
@@ -396,7 +407,7 @@ function resetOnTopFrame(details) {
 
 function applySettingsToSummary(summary, settings) {
   if (!summary || !settings) return summary;
-  const offForSite = Boolean(summary.siteDomain && settings.pausedSites[summary.siteDomain]);
+  const offForSite = isProtectionOff(settings, summary.siteDomain);
   if (!settings.blockingEnabled || offForSite) {
     summary.blockedTrackerCount = 0;
     summary.allowedTrackerCount = summary.trackerRequestCount || 0;
@@ -423,6 +434,19 @@ async function setPaused(siteDomain, paused) {
   if (paused) pausedSites[siteDomain] = true;
   else delete pausedSites[siteDomain];
   await chrome.storage.local.set({ pausedSites });
+  return applySettings();
+}
+
+async function setTemporaryOff(minutes) {
+  const until = minutes ? Date.now() + minutes * 60000 : 0;
+  await chrome.storage.local.set({ tempOffUntil: until, globalOff: false });
+  if (minutes) chrome.alarms.create('privacybrew-temp-off', { delayInMinutes: minutes });
+  else chrome.alarms.clear('privacybrew-temp-off');
+  return applySettings();
+}
+async function setGlobalOff(enabled) {
+  await chrome.storage.local.set({ globalOff: Boolean(enabled), tempOffUntil: 0 });
+  await chrome.alarms.clear('privacybrew-temp-off');
   return applySettings();
 }
 
@@ -531,7 +555,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message && message.type === 'getCookiePopupEnabled' && sender.tab && sender.tab.id >= 0) {
       const state = await ensureTabState(sender.tab.id, sender.url || null);
       const settings = await getSettings();
-      const paused = Boolean(state && state.siteDomain && settings.pausedSites[state.siteDomain]);
+      const paused = Boolean(state && isProtectionOff(settings, state.siteDomain));
       sendResponse({ ok: true, enabled: settings.cookiePopupEnabled && !paused });
       return;
     }
@@ -543,7 +567,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message && message.type === 'init' && sender.tab && sender.tab.id >= 0) {
       const state = await ensureTabState(sender.tab.id, sender.url || null);
       const settings = await getSettings();
-      const paused = Boolean(state && state.siteDomain && settings.pausedSites[state.siteDomain]);
+      const paused = Boolean(state && isProtectionOff(settings, state.siteDomain));
       const enabled = settings.cookiePopupEnabled && !paused;
       const rules = enabled ? await ensureAutoconsentRules() : { v: 1, s: [], c: [] };
       chrome.tabs.sendMessage(sender.tab.id, { type: 'initResp', rules: { autoconsent: [], compact: rules }, config: autoconsentConfig(enabled) }, { frameId: sender.frameId || 0 });
@@ -586,10 +610,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: true });
       return;
     }
+    if (message && message.type === 'adWall' && sender.tab && sender.tab.id >= 0) {
+      const state = await ensureTabState(sender.tab.id, sender.url || null);
+      if (state) { PB.Report.setAdWall(state, message.status || 'detected'); scheduleSave(sender.tab.id, state); }
+      sendResponse({ ok: true });
+      return;
+    }
     if (message && message.type === 'getAdCss' && sender.tab && sender.tab.id >= 0) {
       const state = await ensureTabState(sender.tab.id, sender.url || null);
       const settings = await getSettings();
-      const paused = Boolean(state && state.siteDomain && settings.pausedSites[state.siteDomain]);
+      const paused = Boolean(state && isProtectionOff(settings, state.siteDomain));
       if (!settings.blockingEnabled || !settings.adBlockingEnabled || paused) { sendResponse({ ok: true, css: '' }); return; }
       const data = await ensureCosmeticData();
       const host = String(message.host || '').toLowerCase();
@@ -651,6 +681,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: true, settings });
       return;
     }
+    if (message && message.type === 'setTemporaryOff') {
+      sendResponse({ ok: true, settings: await setTemporaryOff(message.minutes || 0) });
+      return;
+    }
+    if (message && message.type === 'setGlobalOff') {
+      sendResponse({ ok: true, settings: await setGlobalOff(message.enabled) });
+      return;
+    }
     if (message && message.type === 'setGlobalBlocking') {
       sendResponse({ ok: true, settings: await setGlobalBlocking(message.enabled) });
       return;
@@ -687,6 +725,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: false });
   })().catch((error) => sendResponse({ ok: false, error: String(error) }));
   return true;
+});
+
+chrome.alarms && chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'privacybrew-temp-off') setTemporaryOff(0).catch(console.error);
 });
 
 chrome.tabs && chrome.tabs.onRemoved && chrome.tabs.onRemoved.addListener((tabId) => {

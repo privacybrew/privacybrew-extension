@@ -8,161 +8,57 @@
 </head>
 <body>
   <main class="app" aria-live="polite">
-    <div class="brand" aria-label="PrivacyBrew">
-      <img src="icons/icon-32.png" width="24" height="24" alt="">
-      <span>PrivacyBrew</span>
-    </div>
-    <header class="hero">
-      <p class="eyebrow">PrivacyBrew report card</p>
-      <h1 id="siteName">This website</h1>
-      <p id="overall" class="status">Loading report</p>
+    <header class="topbar">
+      <button id="backButton" class="icon-button" type="button" aria-label="Back" hidden>Back</button>
+      <img src="icons/icon-32.png" width="28" height="28" alt="">
+      <div class="title-group"><strong>PrivacyBrew</strong><span id="siteLine">This page</span></div>
+      <button id="settingsButton" class="icon-button" type="button" aria-label="Settings">Settings</button>
+      <button id="powerButton" class="icon-button" type="button" aria-label="Power menu" aria-expanded="false">Power</button>
     </header>
+    <div id="powerMenu" class="menu" hidden>
+      <button id="sitePowerButton" type="button">Turn off on this website</button>
+      <button data-temp="15" type="button">Turn off for 15 minutes</button>
+      <button data-temp="60" type="button">Turn off for 1 hour</button>
+      <button data-temp="restart" type="button">Turn off until the browser restarts</button>
+      <button id="globalOffButton" type="button">Turn off until I turn it on</button>
+    </div>
+    <section id="statusBar" class="status-bar" hidden><span id="statusText"></span><button id="statusTurnOn" type="button">Turn on</button></section>
+    <section id="wallBanner" class="wall-banner" hidden><span id="wallText"></span><button id="wallPause" type="button">Pause on this website</button></section>
 
-    <section class="card" id="messageCard" hidden>
-      <h2 id="messageTitle">PrivacyBrew cannot check this page.</h2>
-      <p id="messageText">Open a website and reload it to check it.</p>
+    <section id="homeView" class="view">
+      <section class="hero-card"><h1 id="siteName">This page</h1><p id="overall" class="status">Loading report</p></section>
+      <div class="card-grid">
+        <button class="home-card" data-detail="trackers"><span id="homeTrackers" class="big">0 found</span><span id="homeTrackersSub">0 blocked · 0 allowed · from 0 companies</span></button>
+        <button class="home-card" data-detail="ads"><span id="homeAds" class="big">0 blocked</span><span id="homeAdsSub">0 ad trackers</span></button>
+        <button class="home-card" data-detail="scripts"><span id="homeScripts" class="big">0 outside scripts</span><span id="homeScriptsSub">0 blocked</span></button>
+        <button class="home-card" data-detail="cookies"><span id="homeCookies" class="big">No pop-up</span><span id="homeCookiesSub">0 third-party cookie websites</span></button>
+        <button class="home-card wide" data-detail="fingerprinting"><span id="homeFingerprint" class="big">None found</span><span>Fingerprinting</span></button>
+      </div>
+      <button id="privacyRequestsRow" class="privacy-row" type="button">GPC sent · DNT off</button>
+      <footer class="home-footer"><a href="https://privacybrew.app/extension.html" target="_blank" rel="noreferrer">privacybrew.app</a><a href="mailto:privacybrew@protonmail.com">Contact</a><button id="feedbackButton" type="button">Feedback</button></footer>
     </section>
 
-    <section class="card" id="summaryCard">
-      <h2>Summary</h2>
-      <div class="stat-grid">
-        <button class="stat-tile" type="button" data-target="trackersCard">
-          <span id="statTrackers" class="stat-number">0</span>
-          <span class="stat-label">Trackers found</span>
-          <span id="statTrackersSub" class="stat-sub">from 0 companies</span>
-        </button>
-        <button class="stat-tile" type="button" data-target="trackersCard">
-          <span id="statBlocked" class="stat-number good">0</span>
-          <span class="stat-label">Blocked</span>
-          <span id="statBlockedSub" class="stat-sub">tracker requests</span>
-        </button>
-        <button class="stat-tile" type="button" data-target="trackersCard">
-          <span id="statAllowed" class="stat-number">0</span>
-          <span class="stat-label">Allowed</span>
-          <span id="statAllowedSub" class="stat-sub">tracker requests</span>
-        </button>
-        <button class="stat-tile" type="button" data-target="trackersCard">
-          <span id="statAds" class="stat-number">0</span>
-          <span class="stat-label">Ad trackers</span>
-          <span id="statAdsSub" class="stat-sub">0 blocked · 0 allowed</span>
-        </button>
-        <button class="stat-tile" type="button" data-target="trackersCard">
-          <span id="statScripts" class="stat-number">0</span>
-          <span class="stat-label">Outside scripts</span>
-          <span id="statScriptsSub" class="stat-sub">0 blocked</span>
-        </button>
-        <button class="stat-tile" type="button" data-target="fingerprintCard">
-          <span id="statFingerprint" class="stat-number good text-stat">None found</span>
-          <span class="stat-label">Fingerprinting</span>
-          <span id="statFingerprintSub" class="stat-sub">on this page</span>
-        </button>
-        <button class="stat-tile stat-wide" type="button" data-target="trackersCard">
-          <span id="statAdsBlocked" class="stat-number good">0</span>
-          <span class="stat-text">
-            <span class="stat-label">Ads blocked</span>
-            <span id="statAdsBlockedSub" class="stat-sub">ad requests on this page</span>
-          </span>
-        </button>
-        <button class="stat-tile" type="button" data-target="cookiesCard">
-          <span id="statCookiePopup" class="stat-number text-stat">No pop-up</span>
-          <span class="stat-label">Cookie pop-up</span>
-          <span id="statCookiePopupSub" class="stat-sub">on this page</span>
-        </button>
-        <button class="stat-tile stat-wide" type="button" data-target="cookiesCard">
-          <span id="statCookies" class="stat-number">0</span>
-          <span class="stat-text">
-            <span class="stat-label">Third-party cookies</span>
-            <span id="statCookiesSub" class="stat-sub">websites</span>
-          </span>
-        </button>
-      </div>
-      <details id="summaryMore">
-        <summary>Show more</summary>
-        <p class="muted">PrivacyBrew counts requests to ad companies. It does not count the ads that you see.</p>
-        <p class="muted">With blocking on, blocked scripts cannot load more trackers. So the counts can be lower.</p>
-      </details>
+    <section id="detailView" class="view" hidden><h2 id="detailTitle">Details</h2><div id="detailContent" class="detail-scroll"></div></section>
+
+    <section id="settingsView" class="view" hidden>
+      <h2>Settings</h2>
+      <h3>Protection</h3>
+      <div class="setting-row"><span>Block trackers</span><button id="globalBlockToggle" type="button" aria-pressed="true">On</button></div>
+      <div class="setting-row"><span>Block ads</span><button id="adBlockToggle" type="button" aria-pressed="true">On</button></div>
+      <div class="setting-row"><span>Handle cookie pop-ups</span><button id="cookiePopupToggle" type="button" aria-pressed="true">On</button></div>
+      <h3>Privacy requests to websites</h3>
+      <div class="setting-row stacked"><div><span>Do not sell or share my data (GPC)</span><p>Some US states require websites to obey this.</p></div><button id="gpcToggle" type="button" aria-pressed="true">On</button></div>
+      <div class="setting-row stacked"><div><span>Do not track (DNT)</span><p>Most websites ignore this. It can make your browser easier to identify.</p></div><button id="dntToggle" type="button" aria-pressed="false">Off</button></div>
+      <h3>Websites where PrivacyBrew is off</h3><ul id="pausedList" class="paused-list"></ul>
+      <div class="limits"><p>PrivacyBrew blocks known trackers and ads.</p><p>It cannot block all video ads.</p><p>PrivacyBrew answers cookie pop-ups for you. It never accepts all cookies.</p><p><a href="https://disconnect.me/trackerprotection" target="_blank" rel="noreferrer">Tracker list: Disconnect</a></p></div>
     </section>
 
-    <section class="card" id="controlsCard">
-      <h2>Blocking settings</h2>
-      <div class="setting-row">
-        <span>Blocking on this website</span>
-        <button id="siteBlockToggle" type="button" aria-pressed="true">On</button>
-      </div>
-      <div class="setting-row">
-        <span>Block trackers on all websites</span>
-        <button id="globalBlockToggle" type="button" aria-pressed="true">On</button>
-      </div>
-      <div class="setting-row">
-        <span>Block ads</span>
-        <button id="adBlockToggle" type="button" aria-pressed="true">On</button>
-      </div>
-      <div class="setting-row">
-        <span>Handle cookie pop-ups</span>
-        <button id="cookiePopupToggle" type="button" aria-pressed="true">On</button>
-      </div>
-      <h3 class="settings-subhead">Privacy requests to websites</h3>
-      <div class="setting-row setting-row-stacked">
-        <div>
-          <span>Do not sell or share my data (GPC)</span>
-          <p class="setting-help">Some US states require websites to obey this.</p>
-        </div>
-        <button id="gpcToggle" type="button" aria-pressed="true">On</button>
-      </div>
-      <div class="setting-row setting-row-stacked">
-        <div>
-          <span>Do not track (DNT)</span>
-          <p class="setting-help">Most websites ignore this. It can make your browser easier to identify.</p>
-        </div>
-        <button id="dntToggle" type="button" aria-pressed="false">Off</button>
-      </div>
-      <div id="reloadHint" class="reload-hint" hidden>
-        <p>Reload the page to see the change.</p>
-        <button id="reloadButton" type="button">Reload page</button>
-      </div>
+    <section id="feedbackView" class="view" hidden>
+      <h2>Feedback</h2><p>Tell us what works and what does not.</p>
+      <label><input id="feedbackPage" type="checkbox"> Include this page's address</label><p id="feedbackPageValue" class="muted"></p>
+      <label><input id="feedbackVersion" type="checkbox" checked> Include extension version and browser</label>
+      <button id="openFeedback" type="button" class="primary">Open feedback form</button>
     </section>
-
-    <section class="card" id="trackersCard">
-      <h2>Companies that see your visit</h2>
-      <p id="trackerSummary" class="muted">No known tracker companies found.</p>
-      <div id="trackers"></div>
-    </section>
-
-    <section class="card">
-      <h2>Other websites contacted</h2>
-      <p id="unknownSummary">No other websites contacted.</p>
-      <details id="unknownDetails">
-        <summary>Show details</summary>
-        <ul id="unknownList"></ul>
-      </details>
-    </section>
-
-    <section class="card" id="cookiesCard">
-      <h2>Third-party cookies</h2>
-      <p id="cookiePopupLine">Cookie pop-up: No pop-up found.</p>
-      <p id="cookieSummary">No third-party websites tried to set a cookie.</p>
-      <p class="muted">A cookie can help a company remember this browser.</p>
-      <ul id="cookieList"></ul>
-    </section>
-
-    <section class="card" id="fingerprintCard">
-      <h2>Fingerprinting</h2>
-      <p id="fingerprintSummary">No fingerprinting signals found.</p>
-      <p class="muted">Fingerprinting can identify your browser without a cookie.</p>
-      <ul id="fingerprintList"></ul>
-    </section>
-
-    <footer class="footer">
-      <p>PrivacyBrew blocks known trackers and ads.</p>
-      <p>It cannot block all video ads.</p>
-      <p>Some websites can break. Turn off blocking for that website.</p>
-      <p>PrivacyBrew answers cookie pop-ups for you. It never accepts all cookies.</p>
-      <p><a id="dataLink" href="https://disconnect.me/trackerprotection" target="_blank" rel="noreferrer">Tracker list: Disconnect (CC BY-NC-SA 4.0)</a></p>
-      <p class="footer-links">
-        <a id="siteLink" href="https://privacybrew.app/" target="_blank" rel="noreferrer">privacybrew.app</a>
-        <a id="checkLink" href="https://privacybrew.app/check.html" target="_blank" rel="noreferrer">Check your browser's privacy</a>
-      </p>
-    </footer>
   </main>
   <script src="lib/report.js"></script>
   <script src="popup.js"></script>
