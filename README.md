@@ -128,3 +128,7 @@ python3 tools/package_smoke.py
 The ZIP is written to `dist/`. The package step strips debug hooks and validates manifest files, rules, host strings, local paths, remote script use, and static rule counts.
 
 Minimum Chrome version is 119. PrivacyBrew uses Manifest V3, dynamic content scripts with `world: "MAIN"`, `matchOriginAsFallback`, `chrome.storage.session`, and Declarative Net Request rule features used by current Chrome stores.
+
+## Popup layout check
+
+`python3 tools/popup_artifacts.py` renders each popup view at 380x580, saves screenshots to `artifacts/`, and fails if any content is cut off or the footer is not visible.

@@ -81,7 +81,12 @@ def open_popup(cdp, ext, sw, name, action=None, state='normal'):
     data=cdp.call('Page.captureScreenshot', {'format':'png'}, sess)['data']
     (ART/name).write_bytes(base64.b64decode(data))
     clipped=cdp.call('Runtime.evaluate', {'expression': "[...document.querySelectorAll('body *:not(script):not(style)')].filter(e=>{const r=e.getBoundingClientRect();return r.bottom>581&&!e.closest('.detail-scroll')&&!e.closest('#settingsView')&&e.id!=='homeView'}).length", 'returnByValue':True}, sess)['result'].get('value')
-    print(name, 'clipped=', clipped)
+    footer_ok=cdp.call('Runtime.evaluate', {'expression': "(()=>{const v=document.querySelector('.view:not([hidden])')||document;const f=document.querySelector('.home-footer');if(!f||f.offsetParent===null)return true;return [...f.querySelectorAll('a,button')].every(e=>e.getBoundingClientRect().bottom<=580)})()", 'returnByValue':True}, sess)['result'].get('value')
+    print(name, 'clipped=', clipped, 'footer_visible=', footer_ok)
+    FAILURES.extend([f'{name}: {clipped} clipped elements'] if clipped else [])
+    FAILURES.extend([f'{name}: footer not fully visible'] if footer_ok is False else [])
+
+FAILURES=[]
 
 if __name__=='__main__':
     proc=None; prof=None
@@ -96,6 +101,9 @@ if __name__=='__main__':
         open_popup(cdp,ext,sw,'pb-ext-worst-case.png', state='worst')
         open_popup(cdp,ext,sw,'pb-ext-wall.png', state='wall')
         open_popup(cdp,ext,sw,'pb-ext-global-off.png', state='global')
+        if FAILURES:
+            raise SystemExit('Popup layout check failed:\n' + '\n'.join(FAILURES))
+        print('Popup layout check passed')
     finally:
         if proc:
             with contextlib.suppress(Exception): proc.terminate(); proc.wait(timeout=5)
