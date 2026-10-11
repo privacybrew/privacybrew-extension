@@ -151,7 +151,7 @@ def cookie_slide(path,before,after,card):
     d.text((70,628),'Without PrivacyBrew:',font=FONT_MED,fill=DIM); d.text((70,676),'the banner asks you to choose.',font=FONT,fill=DIM)
     d.text((670,628),'With PrivacyBrew:',font=FONT_MED,fill=TEXT)
     d.text((670,676),'it selected Reject for you.',font=FONT,fill=DIM)
-    frame(im,card,(1010,610),(150,130)); im.convert('RGB').save(path)
+    im.convert("RGB").save(path)
 def local(path):
     im=bg(); d=ImageDraw.Draw(im); icon=Image.open(ROOT/'extension/icons/icon-128.png').convert('RGBA').resize((120,120)); im.alpha_composite(icon,(90,90)); d.text((240,112),'Local by design',font=FONT_BIG,fill=TEXT)
     y=270
