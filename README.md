@@ -115,3 +115,16 @@ PrivacyBrew blocks known trackers only. It can miss new companies, hidden redire
 | 3 | Same-company session allow | Keep non-ad company resources working on company-owned sites. |
 | 2 | Same-company static allow | Keep non-ad company resources working. |
 | 1 | Tracker blocks and GPC | Block known trackers and send GPC. |
+
+## Package for Chrome Web Store
+
+Run:
+
+```sh
+python3 tools/package.py
+python3 tools/package_smoke.py
+```
+
+The ZIP is written to `dist/`. The package step strips debug hooks and validates manifest files, rules, host strings, local paths, remote script use, and static rule counts.
+
+Minimum Chrome version is 119. PrivacyBrew uses Manifest V3, dynamic content scripts with `world: "MAIN"`, `matchOriginAsFallback`, `chrome.storage.session`, and Declarative Net Request rule features used by current Chrome stores.

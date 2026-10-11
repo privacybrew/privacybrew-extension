@@ -1,6 +1,7 @@
 importScripts('lib/psl.js', 'lib/disconnect.js', 'lib/report.js');
 
 const STORE_PREFIX = 'tab:';
+const DEBUG_REPORT_MESSAGES = true;
 const WRITE_DELAY_MS = 150;
 const supportedProtocols = new Set(['http:', 'https:']);
 const AD_RULESETS = ['ads_easylist'];
@@ -675,12 +676,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: true });
       return;
     }
-    if (message && message.type === 'debugGetReport') {
+    // DEBUG_START
+    if (DEBUG_REPORT_MESSAGES && message && message.type === 'debugGetReport') {
       const state = await ensureTabState(message.tabId, null);
       const settings = await getSettings();
       sendResponse({ ok: true, state, report: state ? applySettingsToSummary(PB.Report.summarize(state), settings) : null, settings });
       return;
     }
+    // DEBUG_END
     sendResponse({ ok: false });
   })().catch((error) => sendResponse({ ok: false, error: String(error) }));
   return true;

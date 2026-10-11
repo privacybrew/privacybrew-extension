@@ -386,17 +386,8 @@ def build_rules(disconnect_data, easylist_text=None):
         base_total = sum(counts.values()) + len(allow_rules) + 1
         easy_budget = max(0, STATIC_RULE_CAP - base_total)
         easy_rules, easy_cosmetic, easy_meta = convert_easylist_network(easylist_text.splitlines(), easy_budget)
-        next_easy_id = max((rule['id'] for rule in easy_rules), default=0) + 1
-        supplemental = [
-            {'id': next_easy_id, 'priority': 300, 'action': {'type': 'allow'}, 'condition': {'urlFilter': '|http://site.test:8765/pagead/allowed.js', 'resourceTypes': ['script']}},
-            {'id': next_easy_id + 1, 'priority': 150, 'action': {'type': 'block'}, 'condition': {'requestDomains': ['googleads.g.doubleclick.net'], 'resourceTypes': ['script', 'image', 'xmlhttprequest', 'sub_frame']}},
-            {'id': next_easy_id + 2, 'priority': 150, 'action': {'type': 'block'}, 'condition': {'urlFilter': '/pagead/', 'resourceTypes': ['script', 'image', 'xmlhttprequest', 'sub_frame']}},
-        ]
-        easy_rules = supplemental + easy_rules
-        # Keep inside the hard cap after supplemental and high-priority rules.
         easy_rules = easy_rules[:easy_budget]
         easy_meta['networkRules'] = len(easy_rules)
-        easy_meta['supplementalTestRules'] = len(supplemental)
         ad_domains = sorted({d for rule in easy_rules if rule.get('action', {}).get('type') == 'block' for d in rule.get('condition', {}).get('requestDomains', [])})
         ad_filters = [rule.get('condition', {}).get('urlFilter') for rule in easy_rules if rule.get('action', {}).get('type') == 'block' and rule.get('condition', {}).get('urlFilter')]
         (DATA / 'easylist_ad_index.json').write_text(json.dumps({'domains': ad_domains, 'urlFilters': ad_filters[:5000]}, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')

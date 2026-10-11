@@ -1,6 +1,7 @@
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
+  const DEBUG_POPUP_TAB_OVERRIDE = true;
   let currentTabId = null;
   let currentReport = null;
 
@@ -22,7 +23,7 @@
 
   async function activeTabId() {
     const params = new URLSearchParams(location.search);
-    const debug = Number(params.get('tabId'));
+    const debug = DEBUG_POPUP_TAB_OVERRIDE ? Number(params.get('tabId')) : 0;
     if (debug > 0) return debug;
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     return tabs && tabs[0] ? tabs[0].id : null;

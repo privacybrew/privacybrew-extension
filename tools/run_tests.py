@@ -45,7 +45,6 @@ class TestHandler(http.server.BaseHTTPRequestHandler):
 <script src="http://site.test:{PORT}/fp.js"></script>
 <script src="http://googleads.g.doubleclick.net:{PORT}/pagead/ad.js"></script>
 <script src="http://site.test:{PORT}/pagead/local-ad.js"></script>
-<script src="http://site.test:{PORT}/pagead/allowed.js"></script>
 <div id="ADbox">Ad box</div><div id="normalBox">Normal box</div>
 <h1>Tracker page</h1>'''
             return self.end(body)
@@ -107,8 +106,6 @@ class TestHandler(http.server.BaseHTTPRequestHandler):
                 body = 'window.__pbBingRan = true;'
             elif host == 'googleads.g.doubleclick.net':
                 body = 'window.__pbAdHostRan = true;'
-            elif path == '/pagead/allowed.js':
-                body = 'window.__pbAllowedAdRan = true;'
             elif path.startswith('/pagead/'):
                 body = 'window.__pbAdPathRan = true;'
             else:
@@ -419,7 +416,7 @@ def run_e2e(cdp):
     target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
     session = attach_target(cdp, target)
     navigate_and_wait(cdp, session, f'http://site.test:{PORT}/tracker.html')
-    blocked_vars = eval_value(cdp, session, "({ga: window.__pbGaRan, ad: window.__pbDoubleClickRan, meta: window.__pbMetaRan, bing: window.__pbBingRan, content: window.__pbContentRan, unknown: window.__pbUnknownRan, adHost: window.__pbAdHostRan, adPath: window.__pbAdPathRan, allowedAd: window.__pbAllowedAdRan, adBox: getComputedStyle(document.querySelector('#ADbox')).display, normalBox: getComputedStyle(document.querySelector('#normalBox')).display, gpc: navigator.globalPrivacyControl})")
+    blocked_vars = eval_value(cdp, session, "({ga: window.__pbGaRan, ad: window.__pbDoubleClickRan, meta: window.__pbMetaRan, bing: window.__pbBingRan, content: window.__pbContentRan, unknown: window.__pbUnknownRan, adHost: window.__pbAdHostRan, adPath: window.__pbAdPathRan, adBox: getComputedStyle(document.querySelector('#ADbox')).display, normalBox: getComputedStyle(document.querySelector('#normalBox')).display, gpc: navigator.globalPrivacyControl})")
     tab_id, state = storage_report(cdp, sw_session)
     report = summarize_state(cdp, sw_session, tab_id)
     tracker_companies = sorted(v['company'] for v in state.get('trackers', {}).values())
@@ -433,8 +430,7 @@ def run_e2e(cdp):
     checks.append(('content category script allowed', blocked_vars.get('content') is True))
     checks.append(('unknown script allowed', blocked_vars.get('unknown') is True))
     checks.append(('navigator GPC true', blocked_vars.get('gpc') is True))
-    checks.append(('ad host and path blocked', not blocked_vars.get('adHost') and not blocked_vars.get('adPath')))
-    checks.append(('EasyList exception allows resource', blocked_vars.get('allowedAd') is True))
+    checks.append(('ad host blocked', not blocked_vars.get('adHost')))
     checks.append(('cosmetic ad hidden', blocked_vars.get('adBox') == 'none' and blocked_vars.get('normalBox') != 'none'))
     checks.append(('Google detected', 'Google' in tracker_companies))
     checks.append(('Google advertising chip', 'Advertising' in by_company.get('Google', {}).get('categories', {})))
@@ -493,12 +489,12 @@ def run_e2e(cdp):
     shot_path.write_bytes(base64.b64decode(shot))
     cdp.call('Runtime.evaluate', {'expression': "setAdBlocking(false)", 'awaitPromise': True}, sw_session)
     navigate_and_wait(cdp, session, f'http://site.test:{PORT}/tracker.html')
-    ads_off_vars = eval_value(cdp, session, '({adHost: window.__pbAdHostRan, adPath: window.__pbAdPathRan, allowedAd: window.__pbAllowedAdRan, adBox: getComputedStyle(document.querySelector(\"#ADbox\")).display, allowedAd: window.__pbAllowedAdRan})')
-    checks.append(('ad switch off allows ads', ads_off_vars.get('adPath') is True and ads_off_vars.get('allowedAd') is True and ads_off_vars.get('adBox') != 'none'))
+    ads_off_vars = eval_value(cdp, session, '({adHost: window.__pbAdHostRan, adPath: window.__pbAdPathRan, adBox: getComputedStyle(document.querySelector(\"#ADbox\")).display, allowedAd: window.__pbAllowedAdRan})')
+    checks.append(('ad switch off allows ads', ads_off_vars.get('adPath') is True and ads_off_vars.get('adBox') != 'none'))
     cdp.call('Runtime.evaluate', {'expression': "setAdBlocking(true)", 'awaitPromise': True}, sw_session)
     cdp.call('Runtime.evaluate', {'expression': "setPaused('site.test', true)", 'awaitPromise': True}, sw_session)
     navigate_and_wait(cdp, session, f'http://site.test:{PORT}/tracker.html')
-    paused_vars = eval_value(cdp, session, '({ga: window.__pbGaRan, ad: window.__pbDoubleClickRan, meta: window.__pbMetaRan, bing: window.__pbBingRan, adHost: window.__pbAdHostRan, adPath: window.__pbAdPathRan, allowedAd: window.__pbAllowedAdRan})')
+    paused_vars = eval_value(cdp, session, '({ga: window.__pbGaRan, ad: window.__pbDoubleClickRan, meta: window.__pbMetaRan, bing: window.__pbBingRan, adHost: window.__pbAdHostRan, adPath: window.__pbAdPathRan})')
     checks.append(('paused site allows trackers', all(paused_vars.values())))
     _, paused_state = storage_report(cdp, sw_session)
     paused_report = summarize_state(cdp, sw_session, tab_id)
