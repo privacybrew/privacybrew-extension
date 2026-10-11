@@ -91,24 +91,54 @@ label { display: block; margin: 14px 0; }
 .app:has(#wallBanner:not([hidden])) .home-card { min-height: 98px; }
 .app:has(#statusBar:not([hidden])) .home-card.wide, .app:has(#wallBanner:not([hidden])) .home-card.wide { min-height: 70px; }
 .app:has(#statusBar:not([hidden])) .hero-card, .app:has(#wallBanner:not([hidden])) .hero-card { padding: 10px; margin: 6px 0; }
-.app:has(#statusBar:not([hidden])):has(#wallBanner:not([hidden])) .home-card {
-  min-height: 86px;
-  padding: 9px;
-}
-.app:has(#statusBar:not([hidden])):has(#wallBanner:not([hidden])) .home-card.wide {
-  min-height: 58px;
-}
-.app:has(#statusBar:not([hidden])):has(#wallBanner:not([hidden])) .hero-card {
-  padding: 8px;
+
+.app.compact-home .hero-card {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
   margin: 5px 0;
 }
-.app:has(#statusBar:not([hidden])):has(#wallBanner:not([hidden])) .privacy-row {
+.app.compact-home .hero-card h1 {
+  font-size: 18px;
+  margin: 0;
+}
+.app.compact-home .hero-card .status {
+  font-size: 13px;
+  white-space: nowrap;
+}
+.app.compact-home .status-bar,
+.app.compact-home .wall-banner {
+  margin: 5px 0;
+  padding: 7px 8px;
+}
+.app.compact-home .home-card {
+  min-height: 78px;
+  padding: 8px;
+}
+.app.compact-home .home-card.wide {
+  min-height: 56px;
+}
+.app.compact-home .big-number,
+.app.compact-home .text-value {
+  font-size: 24px;
+}
+.app.compact-home .big-word {
+  font-size: 13px;
+}
+.app.compact-home .group-label,
+.app.compact-home .subline {
+  font-size: 10.5px;
+}
+.app.compact-home .privacy-row {
+  display: block;
   margin: 6px 0;
-  padding: 7px;
+  padding: 7px 9px;
 }
-.app:has(#statusBar:not([hidden])):has(#wallBanner:not([hidden])) .home-footer {
-  display: none;
+.app.compact-home .home-footer {
+  display: flex;
 }
-.app:has(#statusBar:not([hidden])):has(#wallBanner:not([hidden])) .privacy-row {
-  display: none;
+.app.compact-home .home-footer {
+  bottom: 14px;
 }

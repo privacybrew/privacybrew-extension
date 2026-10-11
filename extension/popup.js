@@ -99,15 +99,17 @@
     $('statusBar').hidden = !status;
     text($('statusText'), status);
 
-    if (report.adWall === 'detected') {
+    const showWall = !status && (report.adWall === 'detected' || report.adWall === 'hidden');
+    if (showWall && report.adWall === 'detected') {
       $('wallBanner').hidden = false;
       text($('wallText'), 'This website asks you to turn off ad blocking.');
-    } else if (report.adWall === 'hidden') {
+    } else if (showWall && report.adWall === 'hidden') {
       $('wallBanner').hidden = false;
       text($('wallText'), 'PrivacyBrew hid an ad blocker message.');
     } else {
       $('wallBanner').hidden = true;
     }
+    document.querySelector('.app').classList.toggle('compact-home', Boolean(status || showWall));
 
     text($('homeTrackersNumber'), String(trackerCount));
     text($('homeTrackersSub'), `${blocked} blocked · ${allowed} allowed · from ${report.trackerCount || 0} ${plural(report.trackerCount || 0, 'company', 'companies')}`);

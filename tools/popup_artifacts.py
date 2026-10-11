@@ -41,9 +41,11 @@ def launch():
 def attach(cdp,target): return cdp.call('Target.attachToTarget', {'targetId':target,'flatten':True})['sessionId']
 def eval_sw(cdp,sw,expr): return cdp.call('Runtime.evaluate', {'expression':expr,'awaitPromise':True,'returnByValue':True}, sw).get('result',{}).get('value')
 
-def create_state(cdp, sw, tab_id, site='news.example', cookie='none', worst=False):
-    adwall = "PB.Report.setAdWall(s, 'detected');" if worst else ''
-    paused = "{'news.example': true}" if worst else "{}"
+def create_state(cdp, sw, tab_id, site='news.example', cookie='none', state='normal'):
+    adwall = "PB.Report.setAdWall(s, 'detected');" if state in ['wall', 'worst'] else ''
+    paused = "{'news.example': true}" if state in ['paused', 'worst'] else "{}"
+    global_off = 'true' if state == 'global' else 'false'
+    temp_until = 'Date.now()+15*60000' if state == 'temp' else '0'
     expr=f"""(async()=>{{
 await ensureData();
 const s=PB.Report.emptyState({tab_id}, 'https://{site}/', '{site}');
@@ -60,7 +62,7 @@ PB.Report.addCookie(s, 'static.doubleclick.net');
 if ('{cookie}'==='rejected') PB.Report.setCookiePopup(s, 'rejected', {{cmp:'OneTrust'}});
 {adwall}
 await chrome.storage.session.set({{['tab:{tab_id}']:s}});
-await chrome.storage.local.set({{pausedSites: {paused}}});
+await chrome.storage.local.set({{pausedSites: {paused}, globalOff: {global_off}, tempOffUntil: {temp_until}}});
 
 return s;
 }})()"""
@@ -68,17 +70,17 @@ return s;
     if 'exceptionDetails' in res:
         raise RuntimeError(res['exceptionDetails'])
 
-def open_popup(cdp, ext, sw, name, action=None, worst=False):
+def open_popup(cdp, ext, sw, name, action=None, state='normal'):
     target=cdp.call('Target.createTarget', {'url': f'chrome-extension://{ext}/popup.html'})['targetId']; sess=attach(cdp,target); cdp.call('Page.enable', sessionId=sess); cdp.call('Emulation.setDeviceMetricsOverride', {'width':380,'height':580,'deviceScaleFactor':1,'mobile':False}, sess)
     time.sleep(.5)
-    tab_id = 424242 + (1 if worst else 0)
-    create_state(cdp, sw, tab_id, worst=worst)
+    tab_id = 424242 + abs(hash(name)) % 10000
+    create_state(cdp, sw, tab_id, state=state)
     cdp.call('Page.navigate', {'url': f'chrome-extension://{ext}/popup.html?tabId={tab_id}'}, sess); time.sleep(.8)
     if action:
         cdp.call('Runtime.evaluate', {'expression': action}, sess); time.sleep(.5)
     data=cdp.call('Page.captureScreenshot', {'format':'png'}, sess)['data']
     (ART/name).write_bytes(base64.b64decode(data))
-    clipped=cdp.call('Runtime.evaluate', {'expression': "[...document.querySelectorAll('body *:not(script):not(style)')].filter(e=>{const r=e.getBoundingClientRect();return r.bottom>580&&!e.closest('.detail-scroll')&&!e.closest('#settingsView')}).length", 'returnByValue':True}, sess)['result'].get('value')
+    clipped=cdp.call('Runtime.evaluate', {'expression': "[...document.querySelectorAll('body *:not(script):not(style)')].filter(e=>{const r=e.getBoundingClientRect();return r.bottom>581&&!e.closest('.detail-scroll')&&!e.closest('#settingsView')&&e.id!=='homeView'}).length", 'returnByValue':True}, sess)['result'].get('value')
     print(name, 'clipped=', clipped)
 
 if __name__=='__main__':
@@ -91,7 +93,9 @@ if __name__=='__main__':
         open_popup(cdp,ext,sw,'pb-ext-power-menu.png', "document.querySelector('#powerButton').click()")
         open_popup(cdp,ext,sw,'pb-ext-power-menu-while.png', "document.querySelector('#powerButton').click(); document.querySelector('#forAWhileButton').click()")
         open_popup(cdp,ext,sw,'pb-ext-feedback.png', "document.querySelector('#feedbackButton').click()")
-        open_popup(cdp,ext,sw,'pb-ext-worst-case.png', worst=True)
+        open_popup(cdp,ext,sw,'pb-ext-worst-case.png', state='worst')
+        open_popup(cdp,ext,sw,'pb-ext-wall.png', state='wall')
+        open_popup(cdp,ext,sw,'pb-ext-global-off.png', state='global')
     finally:
         if proc:
             with contextlib.suppress(Exception): proc.terminate(); proc.wait(timeout=5)
