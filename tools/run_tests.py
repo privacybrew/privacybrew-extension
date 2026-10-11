@@ -49,6 +49,15 @@ class TestHandler(http.server.BaseHTTPRequestHandler):
 <div id="ADbox">Ad box</div><div id="normalBox">Normal box</div>
 <h1>Tracker page</h1>'''
             return self.end(body)
+        if host == 'site.test' and path == '/cookiebot.html':
+            body = '''<!doctype html><title>Cookiebot fixture</title><div id="cbPopupWrap" class="cb-popup--open" style="position:fixed;inset:20px;background:white;color:black;z-index:9999"><p>Cookie consent</p><button id="cbAcceptTrigger" onclick="window.__acceptClicked=true;document.cookie='cbDataAccepted=0; path=/';">Accept</button><button id="cbRefuseTrigger" onclick="window.__rejectClicked=true;document.cookie='cbDataAccepted=1; path=/';this.closest('#cbPopupWrap').style.display='none';">Reject</button></div><h1>Cookiebot</h1>'''
+            return self.end(body)
+        if host == 'site.test' and path == '/simpleconsent.html':
+            body = '''<!doctype html><title>Simple consent fixture</title><dialog class="cookie-consent" open><form class="cookie-consent__form"><p>Cookie consent</p><button value="yes" onclick="window.__acceptClicked=true" type="button">Accept</button><button value="no" onclick="window.__rejectClicked=true;this.closest('dialog').close();" type="button">Reject</button></form></dialog><h1>Simple consent</h1>'''
+            return self.end(body)
+        if host == 'site.test' and path == '/acceptonly.html':
+            body = '''<!doctype html><title>Accept only fixture</title><div id="acceptOnly" role="dialog" style="position:fixed;inset:20px;background:white;color:black;z-index:9999"><p>This site uses cookies for privacy choices.</p><button id="acceptOnlyButton" onclick="window.__acceptClicked=true">Accept all</button></div><h1>Accept only</h1>'''
+            return self.end(body)
         if host == 'site.test' and path == '/spa.html':
             body = f'''<!doctype html><title>SPA page</title>
 <script src="http://www.google-analytics.com:{PORT}/ga.js"></script>
@@ -348,6 +357,37 @@ def run_e2e(cdp):
     checks.append(('no GPC script when off', len(eval_value(cdp, sw_session, "chrome.scripting.getRegisteredContentScripts({ids:['privacybrew-gpc-main']})")) == 0))
     cdp.call('Runtime.evaluate', {'expression': "setGpc(true)", 'awaitPromise': True}, sw_session)
     checks.append(('one GPC script when on again', len(eval_value(cdp, sw_session, "chrome.scripting.getRegisteredContentScripts({ids:['privacybrew-gpc-main']})")) == 1))
+    ac_config = eval_value(cdp, sw_session, 'autoconsentConfig(true)')
+    checks.append(('autoconsent config opt out', ac_config.get('autoAction') == 'optOut'))
+    checks.append(('autoconsent config never opt in', ac_config.get('autoAction') != 'optIn'))
+    cookie_target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
+    cookie_session = attach_target(cdp, cookie_target)
+    navigate_and_wait(cdp, cookie_session, f'http://site.test:{PORT}/cookiebot.html')
+    cookie_tab_id, _ = storage_report(cdp, sw_session)
+    cookie_report = summarize_state(cdp, sw_session, cookie_tab_id)
+    checks.append(('cookie reject clicked', eval_value(cdp, cookie_session, 'window.__rejectClicked === true') is True))
+    checks.append(('cookie accept not clicked', eval_value(cdp, cookie_session, 'window.__acceptClicked === true') is not True))
+    checks.append(('cookie report handled', cookie_report.get('cookiePopup', {}).get('status') in ['rejected', 'answered']))
+    accept_target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
+    accept_session = attach_target(cdp, accept_target)
+    navigate_and_wait(cdp, accept_session, f'http://site.test:{PORT}/acceptonly.html')
+    accept_tab_id, _ = storage_report(cdp, sw_session)
+    accept_report = summarize_state(cdp, sw_session, accept_tab_id)
+    checks.append(('accept only hidden', eval_value(cdp, accept_session, "getComputedStyle(document.querySelector('#acceptOnly')).display") == 'none'))
+    checks.append(('accept only not accepted', eval_value(cdp, accept_session, 'window.__acceptClicked === true') is not True))
+    checks.append(('hidden cookie report', accept_report.get('cookiePopup', {}).get('status') == 'hidden'))
+    cdp.call('Runtime.evaluate', {'expression': "setCookiePopupHandling(false)", 'awaitPromise': True}, sw_session)
+    off_target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
+    off_session = attach_target(cdp, off_target)
+    navigate_and_wait(cdp, off_session, f'http://site.test:{PORT}/acceptonly.html')
+    checks.append(('cookie switch off leaves banner', eval_value(cdp, off_session, "getComputedStyle(document.querySelector('#acceptOnly')).display") != 'none'))
+    cdp.call('Runtime.evaluate', {'expression': "setCookiePopupHandling(true)", 'awaitPromise': True}, sw_session)
+    cdp.call('Runtime.evaluate', {'expression': "setPaused('site.test', true)", 'awaitPromise': True}, sw_session)
+    paused_cookie_target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
+    paused_cookie_session = attach_target(cdp, paused_cookie_target)
+    navigate_and_wait(cdp, paused_cookie_session, f'http://site.test:{PORT}/acceptonly.html')
+    checks.append(('paused site leaves cookie banner', eval_value(cdp, paused_cookie_session, "getComputedStyle(document.querySelector('#acceptOnly')).display") != 'none'))
+    cdp.call('Runtime.evaluate', {'expression': "setPaused('site.test', false)", 'awaitPromise': True}, sw_session)
     target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
     session = attach_target(cdp, target)
     navigate_and_wait(cdp, session, f'http://site.test:{PORT}/tracker.html')

@@ -63,6 +63,11 @@
             <span id="statAdsBlockedSub" class="stat-sub">ad requests on this page</span>
           </span>
         </button>
+        <button class="stat-tile" type="button" data-target="cookiesCard">
+          <span id="statCookiePopup" class="stat-number text-stat">No pop-up</span>
+          <span class="stat-label">Cookie pop-up</span>
+          <span id="statCookiePopupSub" class="stat-sub">on this page</span>
+        </button>
         <button class="stat-tile stat-wide" type="button" data-target="cookiesCard">
           <span id="statCookies" class="stat-number">0</span>
           <span class="stat-text">
@@ -93,6 +98,10 @@
         <button id="adBlockToggle" type="button" aria-pressed="true">On</button>
       </div>
       <div class="setting-row">
+        <span>Handle cookie pop-ups</span>
+        <button id="cookiePopupToggle" type="button" aria-pressed="true">On</button>
+      </div>
+      <div class="setting-row">
         <span>Ask websites not to sell my data</span>
         <button id="gpcToggle" type="button" aria-pressed="true">On</button>
       </div>
@@ -119,6 +128,7 @@
 
     <section class="card" id="cookiesCard">
       <h2>Third-party cookies</h2>
+      <p id="cookiePopupLine">Cookie pop-up: No pop-up found.</p>
       <p id="cookieSummary">No third-party websites tried to set a cookie.</p>
       <p class="muted">A cookie can help a company remember this browser.</p>
       <ul id="cookieList"></ul>
@@ -135,6 +145,7 @@
       <p>PrivacyBrew blocks known trackers and ads.</p>
       <p>It cannot block all video ads.</p>
       <p>Some websites can break. Turn off blocking for that website.</p>
+      <p>PrivacyBrew answers cookie pop-ups for you. It never accepts all cookies.</p>
       <p><a id="dataLink" href="https://disconnect.me/trackerprotection" target="_blank" rel="noreferrer">Tracker list: Disconnect (CC BY-NC-SA 4.0)</a></p>
       <a id="checkLink" href="https://privacybrew.app/check.html" target="_blank" rel="noreferrer">Check your browser's privacy</a>
     </footer>

@@ -32,3 +32,13 @@ The Public Suffix List data stays in a separate generated file under MPL-2.0.
 - Use: Generated ad blocking rules in `extension/rules/ads_easylist.json` and cosmetic selectors in `extension/data/easylist_cosmetic.json`.
 
 EasyList data stays in generated files under its own license.
+
+## DuckDuckGo Autoconsent
+
+- Source: https://registry.npmjs.org/@duckduckgo/autoconsent/-/autoconsent-16.50.0.tgz
+- Version: 16.50.0
+- Project: https://github.com/duckduckgo/autoconsent
+- License: MPL-2.0
+- Use: Vendored unmodified content script and compact rules in `extension/vendor/autoconsent/`.
+
+Autoconsent files stay under MPL-2.0. PrivacyBrew glue code stays under GPLv3.

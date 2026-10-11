@@ -92,11 +92,12 @@
   }
 
   function renderControls(report) {
-    const settings = report.settings || { blockingEnabled: true, adBlockingEnabled: true, gpcEnabled: true, pausedSites: {} };
+    const settings = report.settings || { blockingEnabled: true, adBlockingEnabled: true, cookiePopupEnabled: true, gpcEnabled: true, pausedSites: {} };
     const siteOn = settings.blockingEnabled && !report.sitePaused;
     setToggle($('siteBlockToggle'), siteOn);
     setToggle($('globalBlockToggle'), settings.blockingEnabled);
     setToggle($('adBlockToggle'), settings.blockingEnabled && settings.adBlockingEnabled);
+    setToggle($('cookiePopupToggle'), settings.cookiePopupEnabled && !report.sitePaused);
     setToggle($('gpcToggle'), settings.gpcEnabled);
     $('controlsCard').hidden = report.status !== 'ok';
   }
@@ -159,6 +160,8 @@
     text($('unknownSummary'), unknownCount ? `${unknownCount} ${plural(unknownCount, 'other website was', 'other websites were')} contacted. ${unknownCount === 1 ? 'It is' : 'They are'} not on our tracker list.` : 'No other websites contacted.');
     list(report.unknownDomains || [], $('unknownList'));
     $('unknownDetails').hidden = !(report.unknownDomains || []).length;
+    const cookiePopup = report.cookiePopup || { label: 'No pop-up found' };
+    text($('cookiePopupLine'), `Cookie pop-up: ${cookiePopup.label}.`);
     const cookieCount = (report.cookieDomains || []).length;
     text($('cookieSummary'), cookieCount ? `${cookieCount} third-party ${plural(cookieCount, 'website tried', 'websites tried')} to set a cookie.` : 'No third-party websites tried to set a cookie.');
     list(report.cookieDomains || [], $('cookieList'));
@@ -196,6 +199,12 @@
     $('adBlockToggle').addEventListener('click', async () => {
       const enabled = !(currentReport && currentReport.settings && currentReport.settings.adBlockingEnabled);
       await chrome.runtime.sendMessage({ type: 'setAdBlocking', enabled });
+      showReloadHint();
+      await refresh();
+    });
+    $('cookiePopupToggle').addEventListener('click', async () => {
+      const enabled = !(currentReport && currentReport.settings && currentReport.settings.cookiePopupEnabled);
+      await chrome.runtime.sendMessage({ type: 'setCookiePopupHandling', enabled });
       showReloadHint();
       await refresh();
     });

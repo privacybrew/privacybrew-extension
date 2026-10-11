@@ -58,6 +58,7 @@
       cookieDomains: {},
       fingerprints: {},
       outsideScripts: { urls: {}, blockedUrls: {} },
+      cookiePopup: { status: 'none', label: 'No pop-up found' },
       updatedAt: Date.now()
     };
   }
@@ -143,6 +144,26 @@
     state.ads = state.ads || { blockedHashes: {}, samples: {}, cosmeticMs: [] };
     state.ads.cosmeticMs = state.ads.cosmeticMs || [];
     if (typeof durationMs === 'number') state.ads.cosmeticMs.push(durationMs);
+    state.updatedAt = Date.now();
+    return state;
+  }
+
+
+  function setCookiePopup(state, status, details) {
+    const labels = {
+      none: 'No pop-up found',
+      found: 'Cookie pop-up found',
+      rejected: 'Rejected for you',
+      necessary: 'Kept only necessary cookies',
+      hidden: 'Hidden',
+      answered: 'Answered, not confirmed',
+      error: 'Could not handle'
+    };
+    state.cookiePopup = Object.assign({}, state.cookiePopup || {}, details || {}, {
+      status,
+      label: labels[status] || labels.none,
+      updatedAt: Date.now()
+    });
     state.updatedAt = Date.now();
     return state;
   }
@@ -245,6 +266,7 @@
       outsideScriptBlockedCount: outsideScriptBlockedUrls.length,
       adBlockedRequestCount,
       adCosmeticMaxMs,
+      cookiePopup: state.cookiePopup || { status: 'none', label: 'No pop-up found' },
       trackers,
       unknownDomains: Object.keys(state.unknownDomains || {}).sort(),
       cookieDomains: Object.keys(state.cookieDomains || {}).sort(),
@@ -255,5 +277,5 @@
   }
 
   global.PB = global.PB || {};
-  global.PB.Report = { CATEGORY_LINES, CATEGORY_PRIORITY, FINGERPRINT_LABELS, cleanUrl, emptyState, addTracker, addAdBlocked, addCosmeticTime, addOutsideScript, addUnknown, addCookie, addFingerprint, overallLabel, orderedCategories, plural, summarize };
+  global.PB.Report = { CATEGORY_LINES, CATEGORY_PRIORITY, FINGERPRINT_LABELS, cleanUrl, emptyState, addTracker, setCookiePopup, addAdBlocked, addCosmeticTime, addOutsideScript, addUnknown, addCookie, addFingerprint, overallLabel, orderedCategories, plural, summarize };
 })(typeof globalThis !== 'undefined' ? globalThis : self);

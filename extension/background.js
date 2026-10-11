@@ -9,6 +9,7 @@ const GPC_RULESET = 'gpc_headers';
 const GPC_SCRIPT_ID = 'privacybrew-gpc-main';
 let cosmeticData = null;
 let adIndexData = null;
+let autoconsentRules = null;
 const PAUSE_RULE_BASE = 100000;
 const SAME_COMPANY_SESSION_BASE = 2000000;
 const SAME_COMPANY_RULES_PER_TAB = 1000;
@@ -33,6 +34,11 @@ async function ensureCosmeticData() {
 async function ensureAdIndex() {
   if (!adIndexData) adIndexData = await loadJson('data/easylist_ad_index.json');
   return adIndexData;
+}
+
+async function ensureAutoconsentRules() {
+  if (!autoconsentRules) autoconsentRules = await loadJson('vendor/autoconsent/compact-rules.json');
+  return autoconsentRules;
 }
 
 async function ensureData() {
@@ -72,10 +78,11 @@ function siteDomainFor(url) {
 }
 
 async function getSettings() {
-  const stored = await chrome.storage.local.get({ blockingEnabled: true, adBlockingEnabled: true, gpcEnabled: true, pausedSites: {} });
+  const stored = await chrome.storage.local.get({ blockingEnabled: true, adBlockingEnabled: true, cookiePopupEnabled: true, gpcEnabled: true, pausedSites: {} });
   return {
     blockingEnabled: stored.blockingEnabled !== false,
     adBlockingEnabled: stored.adBlockingEnabled !== false,
+    cookiePopupEnabled: stored.cookiePopupEnabled !== false,
     gpcEnabled: stored.gpcEnabled !== false,
     pausedSites: stored.pausedSites || {}
   };
@@ -408,6 +415,11 @@ async function setAdBlocking(enabled) {
   return applySettings();
 }
 
+async function setCookiePopupHandling(enabled) {
+  await chrome.storage.local.set({ cookiePopupEnabled: Boolean(enabled) });
+  return applySettings();
+}
+
 async function setGpc(enabled) {
   await chrome.storage.local.set({ gpcEnabled: Boolean(enabled) });
   return applySettings();
@@ -433,9 +445,107 @@ chrome.webRequest.onHeadersReceived.addListener((details) => {
   observeHeaders(details).catch(console.error);
 }, { urls: ['<all_urls>'] }, ['responseHeaders', 'extraHeaders']);
 
+
+function autoconsentConfig(enabled) {
+  return {
+    enabled,
+    autoAction: 'optOut',
+    disabledCmps: [],
+    enablePrehide: true,
+    enableCosmeticRules: true,
+    detectRetries: 20,
+    enableFilterList: true,
+    logs: { lifecycle: false, errors: false, evals: false, rules: false }
+  };
+}
+
+async function updateCookiePopup(tabId, status, details) {
+  const state = await ensureTabState(tabId, null);
+  if (!state || state.status !== 'ok') return;
+  PB.Report.setCookiePopup(state, status, details || {});
+  scheduleSave(tabId, state);
+}
+
+async function evalForAutoconsent(sender, msg) {
+  const tabId = sender.tab && sender.tab.id;
+  if (tabId == null || tabId < 0) return false;
+  const code = String(msg.code || 'false');
+  const results = await chrome.scripting.executeScript({
+    target: { tabId, frameIds: [sender.frameId || 0] },
+    world: 'MAIN',
+    func: (body) => {
+      try {
+        return (new Function(`return (${body})();`))();
+      } catch (_) {
+        try { return (new Function(body))(); } catch (e) { return false; }
+      }
+    },
+    args: [code]
+  });
+  return results && results[0] ? results[0].result : false;
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     await ensureData();
+    if (message && message.type === 'getCookiePopupEnabled' && sender.tab && sender.tab.id >= 0) {
+      const state = await ensureTabState(sender.tab.id, sender.url || null);
+      const settings = await getSettings();
+      const paused = Boolean(state && state.siteDomain && settings.pausedSites[state.siteDomain]);
+      sendResponse({ ok: true, enabled: settings.cookiePopupEnabled && !paused });
+      return;
+    }
+    if (message && message.type === 'cookiePopupFallbackHidden' && sender.tab && sender.tab.id >= 0) {
+      await updateCookiePopup(sender.tab.id, 'hidden', { cmp: 'Fallback' });
+      sendResponse({ ok: true });
+      return;
+    }
+    if (message && message.type === 'init' && sender.tab && sender.tab.id >= 0) {
+      const state = await ensureTabState(sender.tab.id, sender.url || null);
+      const settings = await getSettings();
+      const paused = Boolean(state && state.siteDomain && settings.pausedSites[state.siteDomain]);
+      const enabled = settings.cookiePopupEnabled && !paused;
+      const rules = enabled ? await ensureAutoconsentRules() : { v: 1, s: [], c: [] };
+      chrome.tabs.sendMessage(sender.tab.id, { type: 'initResp', rules: { autoconsent: [], compact: rules }, config: autoconsentConfig(enabled) }, { frameId: sender.frameId || 0 });
+      sendResponse({ ok: true });
+      return;
+    }
+    if (message && message.type === 'eval' && sender.tab && sender.tab.id >= 0) {
+      const result = await evalForAutoconsent(sender, message);
+      chrome.tabs.sendMessage(sender.tab.id, { type: 'evalResp', id: message.id, result }, { frameId: sender.frameId || 0 });
+      sendResponse({ ok: true });
+      return;
+    }
+    if (message && message.type === 'popupFound' && sender.tab && sender.tab.id >= 0) {
+      await updateCookiePopup(sender.tab.id, 'found', { cmp: message.cmp });
+      sendResponse({ ok: true });
+      return;
+    }
+    if (message && message.type === 'optOutResult' && sender.tab && sender.tab.id >= 0) {
+      await updateCookiePopup(sender.tab.id, message.result ? 'answered' : 'error', { cmp: message.cmp, selfTest: message.scheduleSelfTest ? 'pending' : '' });
+      sendResponse({ ok: true });
+      return;
+    }
+    if (message && message.type === 'optInResult' && sender.tab && sender.tab.id >= 0) {
+      await updateCookiePopup(sender.tab.id, 'error', { cmp: message.cmp, detail: 'Unexpected accept result' });
+      sendResponse({ ok: true });
+      return;
+    }
+    if (message && message.type === 'selfTestResult' && sender.tab && sender.tab.id >= 0) {
+      await updateCookiePopup(sender.tab.id, message.result ? 'rejected' : 'answered', { cmp: message.cmp, selfTest: message.result ? 'passed' : 'failed' });
+      sendResponse({ ok: true });
+      return;
+    }
+    if (message && message.type === 'autoconsentDone' && sender.tab && sender.tab.id >= 0) {
+      await updateCookiePopup(sender.tab.id, message.isCosmetic ? 'hidden' : 'rejected', { cmp: message.cmp, duration: message.duration });
+      sendResponse({ ok: true });
+      return;
+    }
+    if (message && message.type === 'autoconsentError' && sender.tab && sender.tab.id >= 0) {
+      await updateCookiePopup(sender.tab.id, 'error', { detail: message.details });
+      sendResponse({ ok: true });
+      return;
+    }
     if (message && message.type === 'getAdCss' && sender.tab && sender.tab.id >= 0) {
       const state = await ensureTabState(sender.tab.id, sender.url || null);
       const settings = await getSettings();
@@ -507,6 +617,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message && message.type === 'setAdBlocking') {
       sendResponse({ ok: true, settings: await setAdBlocking(message.enabled) });
+      return;
+    }
+    if (message && message.type === 'setCookiePopupHandling') {
+      sendResponse({ ok: true, settings: await setCookiePopupHandling(message.enabled) });
       return;
     }
     if (message && message.type === 'setGpc') {

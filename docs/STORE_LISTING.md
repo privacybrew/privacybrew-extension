@@ -19,6 +19,7 @@ PrivacyBrew shows who sees your visit to each website, in simple words. It also 
 What you get:
 - A report card for each website: trackers, ads, outside scripts, cookies and fingerprinting.
 - Tracker and ad blocking, on by default. Turn it off for one website if it breaks.
+- Cookie pop-up handling that tries to reject optional cookies.
 - A "do not sell my data" request (Global Privacy Control) to every website.
 
 What PrivacyBrew does not do:

@@ -20,7 +20,7 @@ PrivacyBrew blocks known tracker and ad requests with static rules. It also send
 
 ## `scripting`
 
-PrivacyBrew registers or removes one small main-world content script for GPC. This avoids a first-load race when the GPC setting changes.
+PrivacyBrew registers or removes one small main-world content script for GPC. It also uses scripting for selected cookie pop-up rules that need page-world checks. These scripts run only in the sender tab and frame.
 
 ## Host permissions: `<all_urls>`
 

@@ -2,7 +2,7 @@
 
 PrivacyBrew is a Chrome Manifest V3 prototype for Chrome, Edge, Brave, and Opera. It shows a plain-language privacy report card for the current website.
 
-This prototype blocks known trackers by default. It also detects third-party cookie attempts and some fingerprint methods. The extension makes no network requests of its own and uses only local data files.
+This prototype blocks known trackers by default. It handles many cookie pop-ups, blocks ads, and detects third-party cookie attempts and some fingerprint methods. The extension makes no network requests of its own and uses only local data files.
 
 ## Load the extension
 
@@ -56,6 +56,8 @@ The toolbar badge shows the number of blocked tracker companies on the current p
 PrivacyBrew counts distinct tracker requests by origin and path. It removes query strings and fragments before storage. This keeps tracking IDs out of local reports and reduces retry noise.
 
 ## GPC
+
+Cookie pop-up handling is on by default. PrivacyBrew tries to reject optional cookies. If there is no reject choice or settings path, it hides the pop-up and sends no choice to the site. It never clicks accept all. Per-site pause also turns this off for that website.
 
 The GPC setting is on by default. It sends `Sec-GPC: 1` with browser requests. It also sets `navigator.globalPrivacyControl` to true in page scripts.
 

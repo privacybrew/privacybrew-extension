@@ -124,6 +124,18 @@
     eq(tracker.allowedRequestHashes.length, 1, 'one allowed');
   });
 
+
+  test('Cookie popup report label maps rejected', () => {
+    const s = PB.Report.emptyState(1, 'https://example.com', 'example.com');
+    PB.Report.setCookiePopup(s, 'rejected', { cmp: 'TestCMP' });
+    eq(PB.Report.summarize(s).cookiePopup.label, 'Rejected for you', 'rejected label');
+  });
+  test('Cookie popup report label maps hidden', () => {
+    const s = PB.Report.emptyState(1, 'https://example.com', 'example.com');
+    PB.Report.setCookiePopup(s, 'hidden', { cmp: 'Fallback' });
+    eq(PB.Report.summarize(s).cookiePopup.label, 'Hidden', 'hidden label');
+  });
+
   test('Report keeps multiple company categories', () => {
     const s = PB.Report.emptyState(1, 'https://example.com', 'example.com');
     PB.Report.addTracker(s, disconnect.find('google-analytics.com'), 'google-analytics.com', 'allowed', 'https://google-analytics.com/a.js');

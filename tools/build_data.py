@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json, re, sys, urllib.request
+import io, json, re, sys, tarfile, urllib.request
 from datetime import date, timezone, datetime
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
@@ -10,6 +10,8 @@ ICONS = ROOT / 'extension' / 'icons'
 SERVICES_URL = 'https://raw.githubusercontent.com/disconnectme/disconnect-tracking-protection/master/services.json'
 PSL_URL = 'https://publicsuffix.org/list/public_suffix_list.dat'
 EASYLIST_URL = 'https://easylist.to/easylist/easylist.txt'
+AUTOCONSENT_VERSION = '16.50.0'
+AUTOCONSENT_URL = f'https://registry.npmjs.org/@duckduckgo/autoconsent/-/autoconsent-{AUTOCONSENT_VERSION}.tgz'
 GPL_URL = 'https://www.gnu.org/licenses/gpl-3.0.txt'
 
 CATEGORY_MAP = {
@@ -438,6 +440,22 @@ def build_rules(disconnect_data, easylist_text=None):
     (rules_dir / 'metadata.json').write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     return metadata
 
+def build_autoconsent(raw):
+    vendor = ROOT / 'extension' / 'vendor' / 'autoconsent'
+    vendor.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(fileobj=io.BytesIO(raw), mode='r:gz') as tf:
+        wanted = {
+            'package/dist/addon-mv3/content.bundle.js': vendor / 'content.bundle.js',
+            'package/rules/compact-rules.json': vendor / 'compact-rules.json',
+            'package/LICENSE': vendor / 'LICENSE',
+            'package/package.json': vendor / 'package.json',
+        }
+        for src, dest in wanted.items():
+            data = tf.extractfile(src).read()
+            dest.write_bytes(data)
+    return {'version': AUTOCONSENT_VERSION, 'source': AUTOCONSENT_URL, 'license': 'MPL-2.0'}
+
+
 def make_icons():
     ICONS.mkdir(parents=True, exist_ok=True)
     for size in (16, 32, 48, 128):
@@ -458,11 +476,13 @@ def main():
     services_raw = fetch(SERVICES_URL).decode('utf-8')
     psl_raw = fetch(PSL_URL).decode('utf-8')
     easylist_raw = fetch(EASYLIST_URL).decode('utf-8', errors='replace')
+    autoconsent_raw = fetch(AUTOCONSENT_URL)
     disconnect_data = parse_disconnect(services_raw)
     psl_data = parse_psl(psl_raw)
     (DATA / 'disconnect.json').write_text(json.dumps(disconnect_data, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
     (DATA / 'psl.json').write_text(json.dumps(psl_data, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
     rules_meta = build_rules(disconnect_data, easylist_raw)
+    autoconsent_meta = build_autoconsent(autoconsent_raw)
     today = datetime.now(timezone.utc).date().isoformat()
     (DATA / 'SOURCES.md').write_text(f'''# Data sources
 
@@ -486,6 +506,14 @@ Fetched on {today}.
 - License: GPL-3.0-only or CC-BY-SA-3.0
 - Output: `../rules/ads_easylist.json` and `easylist_cosmetic.json`
 - Notes: PrivacyBrew converts supported network filters to DNR rules. Unsupported filters are skipped and counted in `../rules/metadata.json`.
+
+## DuckDuckGo Autoconsent
+
+- Source: {AUTOCONSENT_URL}
+- Version: {AUTOCONSENT_VERSION}
+- License: MPL-2.0
+- Output: `../vendor/autoconsent/`
+- Notes: Vendored files are unmodified and remain under MPL-2.0.
 
 ## Public Suffix List
 
