@@ -45,6 +45,9 @@ html, body {
 .status-bar, .wall-banner { display: flex; gap: 8px; align-items: center; margin: 8px 0; padding: 8px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--border); }
 .wall-banner { border-color: var(--warning); }
 .view { height: 510px; overflow: hidden; }
+#settingsView { overflow: auto; padding-right: 4px; }
+#settingsView::-webkit-scrollbar { width: 8px; }
+#settingsView::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
 .hero-card, .home-card, .setting-row, .limits, .detail-card { border: 1px solid var(--border); border-radius: 16px; background: var(--panel); padding: 12px; }
 .hero-card { margin: 8px 0; padding: 14px; }
 .hero-card h1 { font-size: 22px; margin: 0 0 4px; overflow: hidden; text-overflow: ellipsis; }
@@ -53,8 +56,8 @@ html, body {
 .status.some { color: var(--accent); }
 .status.high { color: var(--warning); }
 .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.home-card { min-height: 106px; text-align: left; color: var(--text); cursor: pointer; }
-.home-card.wide { grid-column: 1 / -1; min-height: 82px; }
+.home-card { min-height: 112px; text-align: left; color: var(--text); cursor: pointer; }
+.home-card.wide { grid-column: 1 / -1; min-height: 88px; }
 .group-label { display: block; color: var(--text-dim); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 3px; }
 .big-number { font-size: 31px; line-height: 1; font-weight: 850; color: var(--text); }
 .big-word { font-size: 16px; font-weight: 750; margin-left: 4px; }
@@ -84,7 +87,28 @@ label { display: block; margin: 14px 0; }
 [hidden] { display: none !important; }
 
 .text-value { font-size: 27px; }
-.app:has(#statusBar:not([hidden])) .home-card { min-height: 94px; }
-.app:has(#wallBanner:not([hidden])) .home-card { min-height: 94px; }
-.app:has(#statusBar:not([hidden])) .home-card.wide, .app:has(#wallBanner:not([hidden])) .home-card.wide { min-height: 68px; }
+.app:has(#statusBar:not([hidden])) .home-card { min-height: 98px; }
+.app:has(#wallBanner:not([hidden])) .home-card { min-height: 98px; }
+.app:has(#statusBar:not([hidden])) .home-card.wide, .app:has(#wallBanner:not([hidden])) .home-card.wide { min-height: 70px; }
 .app:has(#statusBar:not([hidden])) .hero-card, .app:has(#wallBanner:not([hidden])) .hero-card { padding: 10px; margin: 6px 0; }
+.app:has(#statusBar:not([hidden])):has(#wallBanner:not([hidden])) .home-card {
+  min-height: 86px;
+  padding: 9px;
+}
+.app:has(#statusBar:not([hidden])):has(#wallBanner:not([hidden])) .home-card.wide {
+  min-height: 58px;
+}
+.app:has(#statusBar:not([hidden])):has(#wallBanner:not([hidden])) .hero-card {
+  padding: 8px;
+  margin: 5px 0;
+}
+.app:has(#statusBar:not([hidden])):has(#wallBanner:not([hidden])) .privacy-row {
+  margin: 6px 0;
+  padding: 7px;
+}
+.app:has(#statusBar:not([hidden])):has(#wallBanner:not([hidden])) .home-footer {
+  display: none;
+}
+.app:has(#statusBar:not([hidden])):has(#wallBanner:not([hidden])) .privacy-row {
+  display: none;
+}

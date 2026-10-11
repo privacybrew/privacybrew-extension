@@ -104,7 +104,7 @@ PB.Report.addAdBlocked(s, 'https://googleads.g.doubleclick.net/pagead/ad.js');
 PB.Report.addOutsideScript(s, 'https://cdn.news.example/story.js', 'allowed');
 PB.Report.addFingerprint(s, 'canvas', 'https://{site}/fingerprint.js'); PB.Report.addFingerprint(s, 'webgl', 'https://{site}/fingerprint.js');
 PB.Report.addCookie(s, 'static.doubleclick.net'); if ('{cookie}'==='rejected') PB.Report.setCookiePopup(s, 'rejected', {{cmp:'OneTrust'}});
-await chrome.storage.session.set({{['tab:{tab_id}']:s}}); await chrome.action.setBadgeText({{tabId:{tab_id}, text:'3'}});}})()'''
+await chrome.storage.session.set({{['tab:{tab_id}']:s}}); }})()'''
     cdp.call('Runtime.evaluate', {'expression': expr, 'awaitPromise': True}, sw)
 
 def popup(cdp, ext, sw, tab_id, mode='home'):
@@ -165,7 +165,7 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True); (ROOT/'artifacts').mkdir(exist_ok=True); server=start_server(); proc=None
     try:
         proc,cdp,ext,sw,profile=launch()
-        news=open_page(cdp,f'http://news.example:{PORT}/'); news_tab=tab_id_for_url(cdp,sw,'http://news.example'); create_state(cdp,sw,news_tab)
+        news=open_page(cdp,f'http://news.example:{PORT}/'); news_tab=424242; create_state(cdp,sw,news_tab)
         report=popup(cdp,ext,sw,news_tab,'home'); controls=popup(cdp,ext,sw,news_tab,'settings'); companies=popup(cdp,ext,sw,news_tab,'companies')
         cdp.call('Runtime.evaluate', {'expression':'setCookiePopupHandling(false)', 'awaitPromise':True}, sw)
         before_s=open_page(cdp,f'http://shop.example:{PORT}/'); before=shot(cdp,before_s)
@@ -177,7 +177,7 @@ def main():
         st=json.loads(seen)
         if st['accepted'] or st['visible']: raise SystemExit('Extension did not handle the fixture banner: '+seen)
         after=shot(cdp,after_s)
-        shop_tab=tab_id_for_url(cdp,sw,'http://shop.example'); create_state(cdp,sw,shop_tab,'shop.example','rejected'); cookie_popup=popup(cdp,ext,sw,shop_tab,'cookies')
+        shop_tab=424243; create_state(cdp,sw,shop_tab,'shop.example','rejected'); cookie_popup=popup(cdp,ext,sw,shop_tab,'cookies')
         slide(OUT/'01-report-card.png','See the privacy story','A plain-language report card for each website.\nTrackers, ads, cookies, and fingerprinting in one place.',report)
         slide(OUT/'02-blocking-controls.png','Control each protection','Block trackers and ads by default.\nSend privacy requests to websites.',controls)
         cookie_slide(OUT/'03-cookie-popups.png',before,after,cookie_popup)
