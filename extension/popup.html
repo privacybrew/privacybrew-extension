@@ -11,9 +11,9 @@
     <header class="topbar">
       <button id="backButton" class="icon-button" type="button" aria-label="Back" hidden>Back</button>
       <img src="icons/icon-32.png" width="28" height="28" alt="">
-      <div class="title-group"><strong>PrivacyBrew</strong><span id="siteLine">This page</span></div>
-      <button id="settingsButton" class="icon-button" type="button" aria-label="Settings">Settings</button>
-      <button id="powerButton" class="icon-button" type="button" aria-label="Power menu" aria-expanded="false">Power</button>
+      <div class="title-group"><strong>PrivacyBrew</strong></div>
+      <button id="settingsButton" class="icon-button" type="button" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13.5c.1-.5.1-1 .1-1.5s0-1-.1-1.5l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.6-1.5L14 2h-4l-.4 2.5A8 8 0 0 0 7 6L4.6 5l-2 3.5 2 1.5a9 9 0 0 0 0 3l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 2.6 1.5L10 22h4l.4-2.5a8 8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/></svg></button>
+      <button id="powerButton" class="icon-button" type="button" aria-label="Turn off menu" title="Turn off menu" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3h-2v10h2V3Zm4.8 2.8-1.4 1.4A7 7 0 1 1 7.6 7.2L6.2 5.8a9 9 0 1 0 11.6 0Z"/></svg></button>
     </header>
     <div id="powerMenu" class="menu" hidden>
       <button id="sitePowerButton" type="button">Turn off on this website</button>
@@ -28,11 +28,11 @@
     <section id="homeView" class="view">
       <section class="hero-card"><h1 id="siteName">This page</h1><p id="overall" class="status">Loading report</p></section>
       <div class="card-grid">
-        <button class="home-card" data-detail="trackers"><span id="homeTrackers" class="big">0 found</span><span id="homeTrackersSub">0 blocked · 0 allowed · from 0 companies</span></button>
-        <button class="home-card" data-detail="ads"><span id="homeAds" class="big">0 blocked</span><span id="homeAdsSub">0 ad trackers</span></button>
-        <button class="home-card" data-detail="scripts"><span id="homeScripts" class="big">0 outside scripts</span><span id="homeScriptsSub">0 blocked</span></button>
-        <button class="home-card" data-detail="cookies"><span id="homeCookies" class="big">No pop-up</span><span id="homeCookiesSub">0 third-party cookie websites</span></button>
-        <button class="home-card wide" data-detail="fingerprinting"><span id="homeFingerprint" class="big">None found</span><span>Fingerprinting</span></button>
+        <button class="home-card" data-detail="trackers"><span class="group-label">Trackers</span><span class="big"><span id="homeTrackersNumber" class="big-number">0</span><span class="big-word">found</span></span><span id="homeTrackersSub" class="subline">0 blocked · 0 allowed · from 0 companies</span></button>
+        <button class="home-card" data-detail="ads"><span class="group-label">Ads</span><span class="big"><span id="homeAdsNumber" class="big-number">0</span><span class="big-word">blocked</span></span><span id="homeAdsSub" class="subline">0 ad trackers</span></button>
+        <button class="home-card" data-detail="scripts"><span class="group-label">Scripts</span><span class="big"><span id="homeScriptsNumber" class="big-number">0</span><span class="big-word">outside scripts</span></span><span id="homeScriptsSub" class="subline">0 blocked</span></button>
+        <button class="home-card" data-detail="cookies"><span class="group-label">Cookies</span><span id="homeCookies" class="big">No pop-up</span><span id="homeCookiesSub" class="subline">0 third-party cookie websites</span></button>
+        <button class="home-card wide" data-detail="fingerprinting"><span class="group-label">Fingerprinting</span><span id="homeFingerprint" class="big">None found</span><span class="subline">on this page</span></button>
       </div>
       <button id="privacyRequestsRow" class="privacy-row" type="button">GPC sent · DNT off</button>
       <footer class="home-footer"><a href="https://privacybrew.app/extension.html" target="_blank" rel="noreferrer">privacybrew.app</a><a href="mailto:privacybrew@protonmail.com">Contact</a><button id="feedbackButton" type="button">Feedback</button></footer>

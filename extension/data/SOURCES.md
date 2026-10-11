@@ -29,6 +29,13 @@ Fetched on 2026-10-11.
 - Output: `../vendor/autoconsent/`
 - Notes: Vendored files are unmodified and remain under MPL-2.0.
 
+## EasyList Adblock Warning Removal List
+
+- Source: https://easylist-downloads.adblockplus.org/antiadblockfilters.txt
+- License: GPL-3.0-only or CC-BY-SA-3.0
+- Output: merged into `../rules/ads_easylist.json` and `easylist_cosmetic.json`
+- Notes: PrivacyBrew converts supported anti-adblock network and cosmetic filters with the same converter as EasyList. Unsupported filters are skipped and counted in `../rules/metadata.json`.
+
 ## Public Suffix List
 
 - Source: https://publicsuffix.org/list/public_suffix_list.dat

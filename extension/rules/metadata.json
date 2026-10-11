@@ -26,32 +26,32 @@
   "totalBlockRules": 1828,
   "sameCompanyAllowRules": 1719,
   "totalStaticRules": 3549,
-  "totalStaticRulesWithEasyList": 7308,
+  "totalStaticRulesWithEasyList": 7483,
   "staticRuleCap": 22000,
   "uniqueRuleIds": 5307,
   "limitNote": "Chrome allows at least 30000 static DNR rules for one extension. This prototype stays below that limit.",
   "sameCompanyChoice": "Block rules use excludedInitiatorDomains, and allow_same_company rules use initiatorDomains. Both are generated from Disconnect properties for that company.",
   "easyList": {
-    "networkCandidates": 53303,
-    "networkRules": 3759,
-    "mergedDomainRules": 68,
-    "coveredCandidates": 53303,
+    "networkCandidates": 55949,
+    "networkRules": 3934,
+    "mergedDomainRules": 71,
+    "coveredCandidates": 55949,
     "cutForBudget": 0,
     "skipped": {
       "$popup": 2969,
-      "regex": 15,
+      "regex": 16,
       "$/$script": 2,
       "empty": 2,
       "$rewrite": 7,
-      "$generichide": 169,
+      "$generichide": 185,
       "privacy_path": 4,
       "$)/$script": 1,
       "$csp": 3,
       "cosmetic_unsupported": 669,
-      "cosmetic_procedural": 284
+      "cosmetic_procedural": 287
     },
     "cosmeticGeneric": 1500,
-    "cosmeticSiteDomains": 7641,
-    "cosmeticSiteSelectors": 15930
+    "cosmeticSiteDomains": 8055,
+    "cosmeticSiteSelectors": 16403
   }
 }

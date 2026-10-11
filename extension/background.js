@@ -88,7 +88,10 @@ function siteDomainFor(url) {
 }
 
 async function getSettings() {
-  const stored = await chrome.storage.local.get({ blockingEnabled: true, adBlockingEnabled: true, cookiePopupEnabled: true, gpcEnabled: true, dntEnabled: false, pausedSites: {}, globalOff: false, tempOffUntil: 0 });
+  const [stored, session] = await Promise.all([
+    chrome.storage.local.get({ blockingEnabled: true, adBlockingEnabled: true, cookiePopupEnabled: true, gpcEnabled: true, dntEnabled: false, pausedSites: {}, globalOff: false, tempOffUntil: 0 }),
+    chrome.storage.session.get({ restartOff: false })
+  ]);
   return {
     blockingEnabled: stored.blockingEnabled !== false,
     adBlockingEnabled: stored.adBlockingEnabled !== false,
@@ -97,7 +100,8 @@ async function getSettings() {
     dntEnabled: stored.dntEnabled === true,
     pausedSites: stored.pausedSites || {},
     globalOff: stored.globalOff === true,
-    tempOffUntil: stored.tempOffUntil || 0
+    tempOffUntil: stored.tempOffUntil || 0,
+    restartOff: session.restartOff === true
   };
 }
 
@@ -105,7 +109,7 @@ function isTemporarilyOff(settings) {
   return settings.tempOffUntil && Date.now() < settings.tempOffUntil;
 }
 function isProtectionOff(settings, siteDomain) {
-  return settings.globalOff || isTemporarilyOff(settings) || Boolean(siteDomain && settings.pausedSites[siteDomain]);
+  return settings.globalOff || settings.restartOff || isTemporarilyOff(settings) || Boolean(siteDomain && settings.pausedSites[siteDomain]);
 }
 
 function pauseRuleId(siteDomain) {
@@ -446,6 +450,14 @@ async function setTemporaryOff(minutes) {
 }
 async function setGlobalOff(enabled) {
   await chrome.storage.local.set({ globalOff: Boolean(enabled), tempOffUntil: 0 });
+  await chrome.storage.session.set({ restartOff: false });
+  await chrome.alarms.clear('privacybrew-temp-off');
+  return applySettings();
+}
+
+async function setOffUntilRestart(enabled) {
+  await chrome.storage.local.set({ globalOff: false, tempOffUntil: 0 });
+  await chrome.storage.session.set({ restartOff: Boolean(enabled) });
   await chrome.alarms.clear('privacybrew-temp-off');
   return applySettings();
 }
@@ -687,6 +699,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message && message.type === 'setGlobalOff') {
       sendResponse({ ok: true, settings: await setGlobalOff(message.enabled) });
+      return;
+    }
+    if (message && message.type === 'setOffUntilRestart') {
+      sendResponse({ ok: true, settings: await setOffUntilRestart(message.enabled) });
       return;
     }
     if (message && message.type === 'setGlobalBlocking') {

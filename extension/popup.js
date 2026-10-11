@@ -1,19 +1,307 @@
-(function(){'use strict';
-const $=id=>document.getElementById(id);const DEBUG_POPUP_TAB_OVERRIDE=true;let currentTabId=null,currentReport=null,currentView='home';
-function text(el,v){el.textContent=v}function plural(n,s,p){return n===1?s:(p||s+'s')}function make(tag,v,cls){const e=document.createElement(tag);if(cls)e.className=cls;if(v!==undefined)e.textContent=v;return e}
-async function activeTabId(){const q=new URLSearchParams(location.search);const d=DEBUG_POPUP_TAB_OVERRIDE?Number(q.get('tabId')):0;if(d>0)return d;const tabs=await chrome.tabs.query({active:true,currentWindow:true});return tabs&&tabs[0]?tabs[0].id:null}
-function setToggle(b,on){b.textContent=on?'On':'Off';b.setAttribute('aria-pressed',on?'true':'false')}
-function showView(name){for(const id of ['homeView','detailView','settingsView','feedbackView'])$(id).hidden=true;$(name+'View').hidden=false;$('backButton').hidden=name==='home';currentView=name;$('powerMenu').hidden=true;$('powerButton').setAttribute('aria-expanded','false')}
-function blockingOff(r){return r.sitePaused||(r.settings&&(r.settings.globalOff||r.settings.tempOffUntil&&Date.now()<r.settings.tempOffUntil||!r.settings.blockingEnabled))}
-function statusText(r){const s=r.settings||{};if(r.sitePaused)return'PrivacyBrew is off on this website';if(s.globalOff)return'PrivacyBrew is off';if(s.tempOffUntil&&Date.now()<s.tempOffUntil){const m=Math.max(1,Math.round((s.tempOffUntil-Date.now())/60000));return`PrivacyBrew is off for ${m} more ${plural(m,'minute')}`}return''}
-function renderHome(r){text($('siteLine'),r.siteDomain||'This page');text($('siteName'),r.siteDomain||'This page');text($('overall'),r.label||'No report yet');const off=blockingOff(r);const st=statusText(r);$('statusBar').hidden=!st;text($('statusText'),st);if(r.adWall==='detected'){$('wallBanner').hidden=false;text($('wallText'),'This website asks you to turn off ad blocking.')}else if(r.adWall==='hidden'){$('wallBanner').hidden=false;text($('wallText'),'PrivacyBrew hid an ad blocker message.')}else $('wallBanner').hidden=true;text($('homeTrackers'),`${r.trackerRequestCount||0} found`);text($('homeTrackersSub'),`${off?0:r.blockedTrackerCount||0} blocked · ${off?(r.trackerRequestCount||0):(r.allowedTrackerCount||0)} allowed · from ${r.trackerCount||0} ${plural(r.trackerCount||0,'company','companies')}`);text($('homeAds'),`${off?0:(r.adBlockedRequestCount||0)} blocked`);text($('homeAdsSub'),`${r.adTrackerCount||0} ad trackers`);text($('homeScripts'),`${r.outsideScriptCount||0} outside scripts`);text($('homeScriptsSub'),`${off?0:(r.outsideScriptBlockedCount||0)} blocked`);const cp=r.cookiePopup||{status:'none',label:'No pop-up found'};text($('homeCookies'),cp.status==='none'?'No pop-up':cp.label);text($('homeCookiesSub'),`${(r.cookieDomains||[]).length} third-party cookie ${plural((r.cookieDomains||[]).length,'website')}`);const fp=(r.fingerprints||[]).length;text($('homeFingerprint'),fp?`${fp} ${plural(fp,'method')}`:'None found');text($('privacyRequestsRow'),`${r.settings&&r.settings.gpcEnabled?'GPC sent':'GPC off'} · ${r.settings&&r.settings.dntEnabled?'DNT sent':'DNT off'}`)}
-function trackerDetail(r){const wrap=make('div');const p=make('p',r.blockedTrackerCount?`PrivacyBrew blocked ${r.blockedTrackerCount} tracker ${plural(r.blockedTrackerCount,'request')}.`:'No known tracker companies found.','muted');wrap.appendChild(p);for(const tr of r.trackers||[]){const c=make('section',undefined,'detail-card');const head=make('div');head.appendChild(make('strong',tr.company));for(const cat of tr.categories||[])head.appendChild(make('span',cat,'chip'));c.appendChild(head);c.appendChild(make('p',tr.status,tr.status==='Blocked'?'blocked':'allowed'));c.appendChild(make('p',(r.categoryLines&&r.categoryLines[tr.category])||'', 'muted'));const det=make('details');det.appendChild(make('summary','Show details'));const ul=make('ul');for(const d of tr.domains||[])ul.appendChild(make('li',d));det.appendChild(ul);c.appendChild(det);wrap.appendChild(c)}return wrap}
-function simpleDetail(title,children){const w=make('div');for(const c of children)w.appendChild(c);return w}
-function renderDetail(kind){const r=currentReport;let title='Details',node;if(kind==='trackers'){title='Trackers';node=trackerDetail(r)}else if(kind==='ads'){title='Ads';node=simpleDetail(title,[make('p',`${r.adBlockedRequestCount||0} ad requests blocked.`),make('p',"It's not a sign. It's a targeted ad.",'muted'),make('p','PrivacyBrew counts requests to ad companies. It does not count the ads that you see.','muted')])}else if(kind==='scripts'){title='Outside scripts';node=simpleDetail(title,[make('p',`${r.outsideScriptCount||0} outside scripts. ${r.outsideScriptBlockedCount||0} blocked.`)])}else if(kind==='cookies'){title='Cookies';const cp=r.cookiePopup||{label:'No pop-up found'};node=simpleDetail(title,[make('p',`Cookie pop-up: ${cp.label}.`),make('p',`${(r.cookieDomains||[]).length} third-party cookie ${plural((r.cookieDomains||[]).length,'website')}.`,'muted')])}else{title='Fingerprinting';node=simpleDetail(title,[(r.fingerprints||[]).length?make('ul'):make('p','No fingerprint methods found.')]);if((r.fingerprints||[]).length){for(const fp of r.fingerprints)node.firstChild.appendChild(make('li',`${fp.label}: ${fp.origins.join(', ')}`))}}text($('detailTitle'),title);$('detailContent').textContent='';$('detailContent').appendChild(node);showView('detail')}
-function renderSettings(r){const s=r.settings||{};setToggle($('globalBlockToggle'),s.blockingEnabled);setToggle($('adBlockToggle'),s.adBlockingEnabled&&s.blockingEnabled);setToggle($('cookiePopupToggle'),s.cookiePopupEnabled&&!r.sitePaused);setToggle($('gpcToggle'),s.gpcEnabled);setToggle($('dntToggle'),s.dntEnabled);const ul=$('pausedList');ul.textContent='';for(const site of Object.keys(s.pausedSites||{})){const li=make('li',site+' ');const b=make('button','Remove');b.addEventListener('click',async()=>{await chrome.runtime.sendMessage({type:'setSitePaused',tabId:currentTabId,paused:false});await refresh()});li.appendChild(b);ul.appendChild(li)}if(!ul.children.length)ul.appendChild(make('li','No websites are off.'))}
-function originPath(url){try{const u=new URL(url);return u.origin+u.pathname}catch{return''}}
-function renderFeedback(){const page=originPath(currentReport&&currentReport.url||'');text($('feedbackPageValue'),page||'No page address.')}
-async function refresh(){const res=await chrome.runtime.sendMessage({type:'getReport',tabId:currentTabId});currentReport=res&&res.report?res.report:{status:'needReload'};renderHome(currentReport);renderSettings(currentReport);if(currentView==='feedback')renderFeedback()}
-function bind(){for(const b of document.querySelectorAll('[data-detail]'))b.addEventListener('click',()=>renderDetail(b.dataset.detail));$('settingsButton').onclick=()=>showView('settings');$('feedbackButton').onclick=()=>{renderFeedback();showView('feedback')};$('backButton').onclick=()=>showView('home');$('privacyRequestsRow').onclick=()=>showView('settings');$('powerButton').onclick=()=>{const m=$('powerMenu');m.hidden=!m.hidden;$('powerButton').setAttribute('aria-expanded',m.hidden?'false':'true')};document.addEventListener('keydown',e=>{if(e.key==='Escape')$('powerMenu').hidden=true});$('sitePowerButton').onclick=async()=>{await chrome.runtime.sendMessage({type:'setSitePaused',tabId:currentTabId,paused:!currentReport.sitePaused});await chrome.runtime.sendMessage({type:'reloadTab',tabId:currentTabId})};for(const b of document.querySelectorAll('[data-temp]'))b.onclick=async()=>{const v=b.dataset.temp;await chrome.runtime.sendMessage({type:v==='restart'?'setTemporaryOff':'setTemporaryOff',minutes:v==='restart'?0:Number(v)});await refresh()};$('globalOffButton').onclick=async()=>{await chrome.runtime.sendMessage({type:'setGlobalOff',enabled:true});await refresh()};$('statusTurnOn').onclick=async()=>{await chrome.runtime.sendMessage({type:'setGlobalOff',enabled:false});await chrome.runtime.sendMessage({type:'setTemporaryOff',minutes:0});if(currentReport.sitePaused)await chrome.runtime.sendMessage({type:'setSitePaused',tabId:currentTabId,paused:false});await refresh()};$('wallPause').onclick=async()=>{await chrome.runtime.sendMessage({type:'setSitePaused',tabId:currentTabId,paused:true});await chrome.runtime.sendMessage({type:'reloadTab',tabId:currentTabId})};const toggles=[['globalBlockToggle','setGlobalBlocking','blockingEnabled'],['adBlockToggle','setAdBlocking','adBlockingEnabled'],['cookiePopupToggle','setCookiePopupHandling','cookiePopupEnabled'],['gpcToggle','setGpc','gpcEnabled'],['dntToggle','setDnt','dntEnabled']];for(const[t,msg,key]of toggles)$(t).onclick=async()=>{await chrome.runtime.sendMessage({type:msg,enabled:!(currentReport.settings&&currentReport.settings[key])});await refresh()};$('openFeedback').onclick=async()=>{const params=new URLSearchParams();if($('feedbackVersion').checked){params.set('v',chrome.runtime.getManifest().version);params.set('browser',navigator.userAgent)}if($('feedbackPage').checked)params.set('page',originPath(currentReport.url||''));await chrome.tabs.create({url:'https://privacybrew.app/feedback.html?'+params.toString()})}}
-(async()=>{bind();currentTabId=await activeTabId();await refresh()})().catch(()=>{});
+(function () {
+  'use strict';
+
+  const DEBUG_POPUP_TAB_OVERRIDE = true;
+  const $ = (id) => document.getElementById(id);
+
+  let currentTabId = null;
+  let currentReport = null;
+  let currentView = 'home';
+
+  function text(el, value) {
+    el.textContent = value;
+  }
+
+  function plural(count, singular, pluralText) {
+    return count === 1 ? singular : (pluralText || singular + 's');
+  }
+
+  function make(tag, value, className) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    if (value !== undefined) el.textContent = value;
+    return el;
+  }
+
+  async function activeTabId() {
+    const params = new URLSearchParams(location.search);
+    const debug = DEBUG_POPUP_TAB_OVERRIDE ? Number(params.get('tabId')) : 0;
+    if (debug > 0) return debug;
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    return tabs && tabs[0] ? tabs[0].id : null;
+  }
+
+  function setToggle(button, on) {
+    button.textContent = on ? 'On' : 'Off';
+    button.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+
+  function showView(name) {
+    for (const id of ['homeView', 'detailView', 'settingsView', 'feedbackView']) {
+      $(id).hidden = true;
+    }
+    $(name + 'View').hidden = false;
+    $('backButton').hidden = name === 'home';
+    currentView = name;
+    closePowerMenu();
+  }
+
+  function closePowerMenu() {
+    $('powerMenu').hidden = true;
+    $('powerButton').setAttribute('aria-expanded', 'false');
+  }
+
+  function togglePowerMenu() {
+    const menu = $('powerMenu');
+    menu.hidden = !menu.hidden;
+    $('powerButton').setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
+  }
+
+  function protectionOff(report) {
+    const settings = report.settings || {};
+    return Boolean(report.sitePaused || settings.globalOff || settings.restartOff || (settings.tempOffUntil && Date.now() < settings.tempOffUntil) || !settings.blockingEnabled);
+  }
+
+  function statusText(report) {
+    const settings = report.settings || {};
+    if (report.sitePaused) return 'PrivacyBrew is off on this website';
+    if (settings.restartOff) return 'PrivacyBrew is off until the browser restarts';
+    if (settings.globalOff) return 'PrivacyBrew is off';
+    if (settings.tempOffUntil && Date.now() < settings.tempOffUntil) {
+      const minutes = Math.max(1, Math.round((settings.tempOffUntil - Date.now()) / 60000));
+      return `PrivacyBrew is off for ${minutes} more ${plural(minutes, 'minute')}`;
+    }
+    return '';
+  }
+
+  function setOverallClass(label) {
+    const el = $('overall');
+    el.classList.remove('low', 'some', 'high');
+    if (label === 'Little tracking found') el.classList.add('low');
+    else if (label === 'A lot of tracking') el.classList.add('high');
+    else el.classList.add('some');
+  }
+
+  function renderHome(report) {
+    const settings = report.settings || {};
+    const off = protectionOff(report);
+    const status = statusText(report);
+    const trackerCount = report.trackerRequestCount || 0;
+    const blocked = off ? 0 : (report.blockedTrackerCount || 0);
+    const allowed = off ? trackerCount : (report.allowedTrackerCount || 0);
+    const cookiePopup = report.cookiePopup || { status: 'none', label: 'No pop-up found' };
+    const fingerprintCount = (report.fingerprints || []).length;
+
+    text($('siteName'), report.siteDomain || 'This page');
+    text($('overall'), report.label || 'No report yet');
+    setOverallClass(report.label || '');
+
+    $('statusBar').hidden = !status;
+    text($('statusText'), status);
+
+    if (report.adWall === 'detected') {
+      $('wallBanner').hidden = false;
+      text($('wallText'), 'This website asks you to turn off ad blocking.');
+    } else if (report.adWall === 'hidden') {
+      $('wallBanner').hidden = false;
+      text($('wallText'), 'PrivacyBrew hid an ad blocker message.');
+    } else {
+      $('wallBanner').hidden = true;
+    }
+
+    text($('homeTrackersNumber'), String(trackerCount));
+    text($('homeTrackersSub'), `${blocked} blocked · ${allowed} allowed · from ${report.trackerCount || 0} ${plural(report.trackerCount || 0, 'company', 'companies')}`);
+    text($('homeAdsNumber'), String(off ? 0 : (report.adBlockedRequestCount || 0)));
+    text($('homeAdsSub'), `${report.adTrackerCount || 0} ad trackers`);
+    text($('homeScriptsNumber'), String(report.outsideScriptCount || 0));
+    text($('homeScriptsSub'), `${off ? 0 : (report.outsideScriptBlockedCount || 0)} blocked`);
+    text($('homeCookies'), cookiePopup.status === 'none' ? 'No pop-up' : cookiePopup.label);
+    text($('homeCookiesSub'), `${(report.cookieDomains || []).length} third-party cookie ${plural((report.cookieDomains || []).length, 'website')}`);
+    text($('homeFingerprint'), fingerprintCount ? `${fingerprintCount} ${plural(fingerprintCount, 'method')}` : 'None found');
+    text($('privacyRequestsRow'), `${settings.gpcEnabled ? 'GPC sent' : 'GPC off'} · ${settings.dntEnabled ? 'DNT sent' : 'DNT off'}`);
+    $('powerButton').classList.toggle('off', off);
+  }
+
+  function trackerDetail(report) {
+    const wrap = make('div');
+    wrap.appendChild(make('p', report.blockedTrackerCount ? `PrivacyBrew blocked ${report.blockedTrackerCount} tracker ${plural(report.blockedTrackerCount, 'request')}.` : 'No known tracker companies found.', 'muted'));
+    for (const tracker of report.trackers || []) {
+      const card = make('section', undefined, 'detail-card');
+      const head = make('div');
+      head.appendChild(make('strong', tracker.company));
+      for (const category of tracker.categories || []) head.appendChild(make('span', category, 'chip'));
+      card.appendChild(head);
+      card.appendChild(make('p', tracker.status, tracker.status === 'Blocked' ? 'blocked' : 'allowed'));
+      card.appendChild(make('p', (report.categoryLines && report.categoryLines[tracker.category]) || '', 'muted'));
+      const details = make('details');
+      details.appendChild(make('summary', 'Show details'));
+      const list = make('ul');
+      for (const domain of tracker.domains || []) list.appendChild(make('li', domain));
+      details.appendChild(list);
+      card.appendChild(details);
+      wrap.appendChild(card);
+    }
+    return wrap;
+  }
+
+  function simpleDetail(children) {
+    const wrap = make('div');
+    for (const child of children) wrap.appendChild(child);
+    return wrap;
+  }
+
+  function renderDetail(kind) {
+    const report = currentReport;
+    let title = 'Details';
+    let node;
+    if (kind === 'trackers') {
+      title = 'Trackers';
+      node = trackerDetail(report);
+    } else if (kind === 'ads') {
+      title = 'Ads';
+      node = simpleDetail([
+        make('p', `${report.adBlockedRequestCount || 0} ad requests blocked.`),
+        make('p', "It's not a sign. It's a targeted ad.", 'muted'),
+        make('p', 'PrivacyBrew counts requests to ad companies. It does not count the ads that you see.', 'muted')
+      ]);
+    } else if (kind === 'scripts') {
+      title = 'Outside scripts';
+      node = simpleDetail([make('p', `${report.outsideScriptCount || 0} outside scripts. ${report.outsideScriptBlockedCount || 0} blocked.`)]);
+    } else if (kind === 'cookies') {
+      title = 'Cookies';
+      const popup = report.cookiePopup || { label: 'No pop-up found' };
+      node = simpleDetail([
+        make('p', `Cookie pop-up: ${popup.label}.`),
+        make('p', `${(report.cookieDomains || []).length} third-party cookie ${plural((report.cookieDomains || []).length, 'website')}.`, 'muted')
+      ]);
+    } else {
+      title = 'Fingerprinting';
+      if ((report.fingerprints || []).length) {
+        const list = make('ul');
+        for (const item of report.fingerprints) list.appendChild(make('li', `${item.label}: ${item.origins.join(', ')}`));
+        node = simpleDetail([list]);
+      } else {
+        node = simpleDetail([make('p', 'No fingerprint methods found.')]);
+      }
+    }
+    text($('detailTitle'), title);
+    $('detailContent').textContent = '';
+    $('detailContent').appendChild(node);
+    showView('detail');
+  }
+
+  function renderSettings(report) {
+    const settings = report.settings || {};
+    setToggle($('globalBlockToggle'), settings.blockingEnabled);
+    setToggle($('adBlockToggle'), settings.adBlockingEnabled && settings.blockingEnabled);
+    setToggle($('cookiePopupToggle'), settings.cookiePopupEnabled && !report.sitePaused);
+    setToggle($('gpcToggle'), settings.gpcEnabled);
+    setToggle($('dntToggle'), settings.dntEnabled);
+    const list = $('pausedList');
+    list.textContent = '';
+    for (const site of Object.keys(settings.pausedSites || {})) {
+      const item = make('li', site + ' ');
+      const button = make('button', 'Remove');
+      button.addEventListener('click', async () => {
+        await chrome.runtime.sendMessage({ type: 'setSitePaused', tabId: currentTabId, paused: false });
+        await refresh();
+      });
+      item.appendChild(button);
+      list.appendChild(item);
+    }
+    if (!list.children.length) list.appendChild(make('li', 'No websites are off.'));
+  }
+
+  function originPath(url) {
+    try {
+      const parsed = new URL(url);
+      return parsed.origin + parsed.pathname;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function browserLabel() {
+    const brands = navigator.userAgentData && navigator.userAgentData.brands;
+    const brand = brands && brands.find((item) => /Chrome/i.test(item.brand));
+    if (brand) return `${brand.brand.replace('Google ', '')} ${brand.version}`;
+    const match = navigator.userAgent.match(/Chrome\/(\d+)/);
+    return match ? `Chrome ${match[1]}` : 'Browser';
+  }
+
+  function renderFeedback() {
+    const page = originPath((currentReport && currentReport.url) || '');
+    text($('feedbackPageValue'), page || 'No page address.');
+  }
+
+  async function refresh() {
+    const response = await chrome.runtime.sendMessage({ type: 'getReport', tabId: currentTabId });
+    currentReport = response && response.report ? response.report : { status: 'needReload' };
+    renderHome(currentReport);
+    renderSettings(currentReport);
+    if (currentView === 'feedback') renderFeedback();
+  }
+
+  function bind() {
+    for (const button of document.querySelectorAll('[data-detail]')) button.addEventListener('click', () => renderDetail(button.dataset.detail));
+    $('settingsButton').addEventListener('click', () => showView('settings'));
+    $('feedbackButton').addEventListener('click', () => { renderFeedback(); showView('feedback'); });
+    $('backButton').addEventListener('click', () => showView('home'));
+    $('privacyRequestsRow').addEventListener('click', () => showView('settings'));
+    $('powerButton').addEventListener('click', togglePowerMenu);
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closePowerMenu(); });
+
+    $('sitePowerButton').addEventListener('click', async () => {
+      await chrome.runtime.sendMessage({ type: 'setSitePaused', tabId: currentTabId, paused: !currentReport.sitePaused });
+      await chrome.runtime.sendMessage({ type: 'reloadTab', tabId: currentTabId });
+    });
+    for (const button of document.querySelectorAll('[data-temp]')) {
+      button.addEventListener('click', async () => {
+        if (button.dataset.temp === 'restart') await chrome.runtime.sendMessage({ type: 'setOffUntilRestart', enabled: true });
+        else await chrome.runtime.sendMessage({ type: 'setTemporaryOff', minutes: Number(button.dataset.temp) });
+        await refresh();
+      });
+    }
+    $('globalOffButton').addEventListener('click', async () => { await chrome.runtime.sendMessage({ type: 'setGlobalOff', enabled: true }); await refresh(); });
+    $('statusTurnOn').addEventListener('click', async () => {
+      await chrome.runtime.sendMessage({ type: 'setGlobalOff', enabled: false });
+      await chrome.runtime.sendMessage({ type: 'setTemporaryOff', minutes: 0 });
+      await chrome.runtime.sendMessage({ type: 'setOffUntilRestart', enabled: false });
+      if (currentReport.sitePaused) await chrome.runtime.sendMessage({ type: 'setSitePaused', tabId: currentTabId, paused: false });
+      await refresh();
+    });
+    $('wallPause').addEventListener('click', async () => {
+      await chrome.runtime.sendMessage({ type: 'setSitePaused', tabId: currentTabId, paused: true });
+      await chrome.runtime.sendMessage({ type: 'reloadTab', tabId: currentTabId });
+    });
+
+    const toggles = [
+      ['globalBlockToggle', 'setGlobalBlocking', 'blockingEnabled'],
+      ['adBlockToggle', 'setAdBlocking', 'adBlockingEnabled'],
+      ['cookiePopupToggle', 'setCookiePopupHandling', 'cookiePopupEnabled'],
+      ['gpcToggle', 'setGpc', 'gpcEnabled'],
+      ['dntToggle', 'setDnt', 'dntEnabled']
+    ];
+    for (const [id, message, key] of toggles) {
+      $(id).addEventListener('click', async () => {
+        await chrome.runtime.sendMessage({ type: message, enabled: !(currentReport.settings && currentReport.settings[key]) });
+        await refresh();
+      });
+    }
+    $('openFeedback').addEventListener('click', async () => {
+      const params = new URLSearchParams();
+      if ($('feedbackVersion').checked) {
+        params.set('v', chrome.runtime.getManifest().version);
+        params.set('browser', browserLabel());
+      }
+      if ($('feedbackPage').checked) params.set('page', originPath(currentReport.url || ''));
+      await chrome.tabs.create({ url: 'https://privacybrew.app/feedback.html?' + params.toString() });
+    });
+  }
+
+  (async () => {
+    bind();
+    currentTabId = await activeTabId();
+    await refresh();
+  })().catch(() => {});
 })();
