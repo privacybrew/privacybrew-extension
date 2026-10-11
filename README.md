@@ -57,6 +57,8 @@ PrivacyBrew counts distinct tracker requests by origin and path. It removes quer
 
 ## GPC
 
+Cookie pop-up handling is on by default. No dynamic cookie-rule code is downloaded or run. PrivacyBrew only runs fixed Autoconsent snippets that ship with the extension.
+
 Cookie pop-up handling is on by default. PrivacyBrew tries to reject optional cookies. If there is no reject choice or settings path, it hides the pop-up and sends no choice to the site. It never clicks accept all. Per-site pause also turns this off for that website.
 
 The GPC setting is on by default. It sends `Sec-GPC: 1` with browser requests. It also sets `navigator.globalPrivacyControl` to true in page scripts.

@@ -32,10 +32,10 @@
   "limitNote": "Chrome allows at least 30000 static DNR rules for one extension. This prototype stays below that limit.",
   "sameCompanyChoice": "Block rules use excludedInitiatorDomains, and allow_same_company rules use initiatorDomains. Both are generated from Disconnect properties for that company.",
   "easyList": {
-    "networkCandidates": 53284,
+    "networkCandidates": 53286,
     "networkRules": 3762,
     "mergedDomainRules": 68,
-    "coveredCandidates": 53284,
+    "coveredCandidates": 53286,
     "cutForBudget": 0,
     "skipped": {
       "$popup": 2969,

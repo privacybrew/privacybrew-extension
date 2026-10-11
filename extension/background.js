@@ -10,6 +10,7 @@ const GPC_SCRIPT_ID = 'privacybrew-gpc-main';
 let cosmeticData = null;
 let adIndexData = null;
 let autoconsentRules = null;
+let autoconsentEvalSnippets = null;
 const PAUSE_RULE_BASE = 100000;
 const SAME_COMPANY_SESSION_BASE = 2000000;
 const SAME_COMPANY_RULES_PER_TAB = 1000;
@@ -20,6 +21,7 @@ let psl = null;
 let disconnect = null;
 const memory = new Map();
 const timers = new Map();
+const cookiePopupTimers = new Map();
 
 async function loadJson(path) {
   const response = await fetch(chrome.runtime.getURL(path));
@@ -39,6 +41,11 @@ async function ensureAdIndex() {
 async function ensureAutoconsentRules() {
   if (!autoconsentRules) autoconsentRules = await loadJson('vendor/autoconsent/compact-rules.json');
   return autoconsentRules;
+}
+
+async function ensureAutoconsentEvalSnippets() {
+  if (!autoconsentEvalSnippets) autoconsentEvalSnippets = await loadJson('vendor/autoconsent/eval-snippets.json');
+  return autoconsentEvalSnippets;
 }
 
 async function ensureData() {
@@ -462,23 +469,37 @@ function autoconsentConfig(enabled) {
 async function updateCookiePopup(tabId, status, details) {
   const state = await ensureTabState(tabId, null);
   if (!state || state.status !== 'ok') return;
+  if (status !== 'found') {
+    clearTimeout(cookiePopupTimers.get(tabId));
+    cookiePopupTimers.delete(tabId);
+  }
   PB.Report.setCookiePopup(state, status, details || {});
   scheduleSave(tabId, state);
+  if (status === 'found') {
+    clearTimeout(cookiePopupTimers.get(tabId));
+    cookiePopupTimers.set(tabId, setTimeout(async () => {
+      cookiePopupTimers.delete(tabId);
+      const latest = await getState(tabId);
+      if (latest && latest.cookiePopup && latest.cookiePopup.status === 'found') {
+        PB.Report.setCookiePopup(latest, 'hidden', { cmp: latest.cookiePopup.cmp || 'Cookie pop-up', detail: 'Timed out after detection' });
+        scheduleSave(tabId, latest);
+      }
+    }, 15000));
+  }
 }
 
 async function evalForAutoconsent(sender, msg) {
   const tabId = sender.tab && sender.tab.id;
   if (tabId == null || tabId < 0) return false;
-  const code = String(msg.code || 'false');
+  const snippets = await ensureAutoconsentEvalSnippets();
+  const snippetId = String(msg.snippetId || '');
+  const code = String(msg.code || '');
+  if (!snippetId || snippets[snippetId] !== code) return false;
   const results = await chrome.scripting.executeScript({
     target: { tabId, frameIds: [sender.frameId || 0] },
     world: 'MAIN',
     func: (body) => {
-      try {
-        return (new Function(`return (${body})();`))();
-      } catch (_) {
-        try { return (new Function(body))(); } catch (e) { return false; }
-      }
+      try { return (new Function(`return ${body}`))(); } catch (_) { return false; }
     },
     args: [code]
   });
@@ -517,12 +538,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
     if (message && message.type === 'popupFound' && sender.tab && sender.tab.id >= 0) {
-      await updateCookiePopup(sender.tab.id, 'found', { cmp: message.cmp });
+      await updateCookiePopup(sender.tab.id, 'hidden', { cmp: message.cmp });
       sendResponse({ ok: true });
       return;
     }
     if (message && message.type === 'optOutResult' && sender.tab && sender.tab.id >= 0) {
-      await updateCookiePopup(sender.tab.id, message.result ? 'answered' : 'error', { cmp: message.cmp, selfTest: message.scheduleSelfTest ? 'pending' : '' });
+      await updateCookiePopup(sender.tab.id, message.result ? 'answered' : 'error', { cmp: message.cmp, selfTest: '' });
       sendResponse({ ok: true });
       return;
     }
@@ -537,7 +558,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
     if (message && message.type === 'autoconsentDone' && sender.tab && sender.tab.id >= 0) {
-      await updateCookiePopup(sender.tab.id, message.isCosmetic ? 'hidden' : 'rejected', { cmp: message.cmp, duration: message.duration });
+      await updateCookiePopup(sender.tab.id, message.isCosmetic ? 'hidden' : 'rejected', { cmp: message.cmp, duration: message.duration, selfTest: '' });
       sendResponse({ ok: true });
       return;
     }
@@ -645,6 +666,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.tabs && chrome.tabs.onRemoved && chrome.tabs.onRemoved.addListener((tabId) => {
   memory.delete(tabId);
+  clearTimeout(cookiePopupTimers.get(tabId));
+  cookiePopupTimers.delete(tabId);
   chrome.storage.session.remove(key(tabId));
   chrome.declarativeNetRequest.getSessionRules().then((rules) => {
     const base = sameCompanyRuleBase(tabId);

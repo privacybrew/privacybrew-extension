@@ -29,3 +29,7 @@ PrivacyBrew must observe requests on any website the user opens. This permission
 ## No `tabs` permission
 
 The extension does not request the `tabs` permission. It uses the active tab ID from the popup and navigation events in the service worker.
+
+## Autoconsent eval bridge
+
+Some cookie pop-up rules need page-world checks. PrivacyBrew does not run remote code. It runs only fixed Autoconsent snippets that ship with the extension, and rejects all other eval requests.

@@ -360,6 +360,8 @@ def run_e2e(cdp):
     ac_config = eval_value(cdp, sw_session, 'autoconsentConfig(true)')
     checks.append(('autoconsent config opt out', ac_config.get('autoAction') == 'optOut'))
     checks.append(('autoconsent config never opt in', ac_config.get('autoAction') != 'optIn'))
+    checks.append(('autoconsent allowlisted eval runs', eval_value(cdp, sw_session, "(async()=>{const tab=(await chrome.tabs.query({active:true,lastFocusedWindow:true}))[0]; return evalForAutoconsent({tab, frameId:0}, {snippetId:'EVAL_0', code:'(() => console.log(1))()'});})()") is None))
+    checks.append(('autoconsent non-allowlisted eval refused', eval_value(cdp, sw_session, "(async()=>{const tab=(await chrome.tabs.query({active:true,lastFocusedWindow:true}))[0]; return evalForAutoconsent({tab, frameId:0}, {snippetId:'EVAL_0', code:'(() => 7)()'});})()") is False))
     cookie_target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
     cookie_session = attach_target(cdp, cookie_target)
     navigate_and_wait(cdp, cookie_session, f'http://site.test:{PORT}/cookiebot.html')

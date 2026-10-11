@@ -440,20 +440,111 @@ def build_rules(disconnect_data, easylist_text=None):
     (rules_dir / 'metadata.json').write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     return metadata
 
+def split_object_entries(body):
+    entries = []
+    i = 0
+    n = len(body)
+    while i < n:
+        while i < n:
+            while i < n and body[i] in ' \n\t,':
+                i += 1
+            if i + 1 < n and body[i:i+2] == '//':
+                while i < n and body[i] != '\n':
+                    i += 1
+                continue
+            break
+        name_start = i
+        while i < n and re.match(r'[A-Za-z0-9_]', body[i]):
+            i += 1
+        if i == name_start:
+            break
+        name = body[name_start:i]
+        while i < n and body[i] in ' \n\t':
+            i += 1
+        if i >= n or body[i] != ':':
+            break
+        i += 1
+        value_start = i
+        depth = 0
+        quote = None
+        escape = False
+        template_expr_depth = 0
+        while i < n:
+            ch = body[i]
+            if quote:
+                if escape:
+                    escape = False
+                elif ch == '\\':
+                    escape = True
+                elif ch == quote:
+                    quote = None
+                i += 1
+                continue
+            if ch in ['"', "'", '`']:
+                quote = ch
+            elif ch in '([{':
+                depth += 1
+            elif ch in ')]}':
+                depth -= 1
+            elif ch == ',' and depth == 0:
+                break
+            i += 1
+        value = body[value_start:i].strip()
+        if name and value:
+            entries.append((name, value))
+        i += 1
+    return entries
+
+def extract_eval_snippets(content_bundle):
+    marker = 'var snippets = {'
+    start = content_bundle.index(marker) + len('var snippets = ')
+    depth = 0
+    end = start
+    quote = None
+    escape = False
+    while end < len(content_bundle):
+        ch = content_bundle[end]
+        if quote:
+            if escape:
+                escape = False
+            elif ch == '\\':
+                escape = True
+            elif ch == quote:
+                quote = None
+        else:
+            if ch in ['"', "'", '`']:
+                quote = ch
+            elif ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    end += 1
+                    break
+        end += 1
+    obj = content_bundle[start:end]
+    inner = obj[1:-1]
+    snippets = {}
+    for name, value in split_object_entries(inner):
+        snippets[name] = f'({value})()'
+    return snippets
+
 def build_autoconsent(raw):
     vendor = ROOT / 'extension' / 'vendor' / 'autoconsent'
     vendor.mkdir(parents=True, exist_ok=True)
     with tarfile.open(fileobj=io.BytesIO(raw), mode='r:gz') as tf:
-        wanted = {
-            'package/dist/addon-mv3/content.bundle.js': vendor / 'content.bundle.js',
-            'package/rules/compact-rules.json': vendor / 'compact-rules.json',
-            'package/LICENSE': vendor / 'LICENSE',
-            'package/package.json': vendor / 'package.json',
+        content_bundle = tf.extractfile('package/dist/addon-mv3/content.bundle.js').read().decode('utf-8')
+        wanted_bytes = {
+            'content.bundle.js': content_bundle.encode('utf-8'),
+            'compact-rules.json': tf.extractfile('package/rules/compact-rules.json').read(),
+            'LICENSE': tf.extractfile('package/LICENSE').read(),
+            'package.json': tf.extractfile('package/package.json').read(),
         }
-        for src, dest in wanted.items():
-            data = tf.extractfile(src).read()
-            dest.write_bytes(data)
-    return {'version': AUTOCONSENT_VERSION, 'source': AUTOCONSENT_URL, 'license': 'MPL-2.0'}
+        for name, data in wanted_bytes.items():
+            (vendor / name).write_bytes(data)
+        snippets = extract_eval_snippets(content_bundle)
+        (vendor / 'eval-snippets.json').write_text(json.dumps(snippets, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')
+    return {'version': AUTOCONSENT_VERSION, 'source': AUTOCONSENT_URL, 'license': 'MPL-2.0', 'evalSnippets': len(snippets)}
 
 
 def make_icons():
