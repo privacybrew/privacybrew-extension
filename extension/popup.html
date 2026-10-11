@@ -17,9 +17,12 @@
     </header>
     <div id="powerMenu" class="menu" hidden>
       <button id="sitePowerButton" type="button">Turn off on this website</button>
-      <button data-temp="15" type="button">Turn off for 15 minutes</button>
-      <button data-temp="60" type="button">Turn off for 1 hour</button>
-      <button data-temp="restart" type="button">Turn off until the browser restarts</button>
+      <button id="forAWhileButton" type="button" aria-expanded="false">Turn off for a while</button>
+      <div id="forAWhileSubmenu" class="submenu" hidden>
+        <button data-temp="15" type="button">15 minutes</button>
+        <button data-temp="60" type="button">1 hour</button>
+        <button data-temp="restart" type="button">Until the browser restarts</button>
+      </div>
       <button id="globalOffButton" type="button">Turn off until I turn it on</button>
     </div>
     <section id="statusBar" class="status-bar" hidden><span id="statusText"></span><button id="statusTurnOn" type="button">Turn on</button></section>
@@ -31,11 +34,11 @@
         <button class="home-card" data-detail="trackers"><span class="group-label">Trackers</span><span class="big"><span id="homeTrackersNumber" class="big-number">0</span><span class="big-word">found</span></span><span id="homeTrackersSub" class="subline">0 blocked · 0 allowed · from 0 companies</span></button>
         <button class="home-card" data-detail="ads"><span class="group-label">Ads</span><span class="big"><span id="homeAdsNumber" class="big-number">0</span><span class="big-word">blocked</span></span><span id="homeAdsSub" class="subline">0 ad trackers</span></button>
         <button class="home-card" data-detail="scripts"><span class="group-label">Scripts</span><span class="big"><span id="homeScriptsNumber" class="big-number">0</span><span class="big-word">outside scripts</span></span><span id="homeScriptsSub" class="subline">0 blocked</span></button>
-        <button class="home-card" data-detail="cookies"><span class="group-label">Cookies</span><span id="homeCookies" class="big">No pop-up</span><span id="homeCookiesSub" class="subline">0 third-party cookie websites</span></button>
-        <button class="home-card wide" data-detail="fingerprinting"><span class="group-label">Fingerprinting</span><span id="homeFingerprint" class="big">None found</span><span class="subline">on this page</span></button>
+        <button class="home-card" data-detail="cookies"><span class="group-label">Cookies</span><span class="big"><span id="homeCookiesValue" class="big-number text-value">None</span></span><span id="homeCookiesSub" class="subline">0 third-party cookie websites</span></button>
+        <button class="home-card wide" data-detail="fingerprinting"><span class="group-label">Fingerprinting</span><span class="big"><span id="homeFingerprintNumber" class="big-number text-value">None</span><span id="homeFingerprintWord" class="big-word"></span></span><span class="subline">on this page</span></button>
       </div>
       <button id="privacyRequestsRow" class="privacy-row" type="button">GPC sent · DNT off</button>
-      <footer class="home-footer"><a href="https://privacybrew.app/extension.html" target="_blank" rel="noreferrer">privacybrew.app</a><a href="mailto:privacybrew@protonmail.com">Contact</a><button id="feedbackButton" type="button">Feedback</button></footer>
+      <footer class="home-footer"><a href="https://privacybrew.app/extension.html" target="_blank" rel="noreferrer">privacybrew.app</a><span>·</span><a href="mailto:privacybrew@protonmail.com">Contact</a><span>·</span><button id="feedbackButton" type="button">Feedback</button></footer>
     </section>
 
     <section id="detailView" class="view" hidden><h2 id="detailTitle">Details</h2><div id="detailContent" class="detail-scroll"></div></section>

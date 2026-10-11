@@ -9,10 +9,17 @@
   }
   function scan() {
     try {
+      const knownHidden = document.querySelector('#ADbox');
+      if (knownHidden && getComputedStyle(knownHidden).display === 'none' && (document.documentElement.style.overflow === 'hidden' || document.body.style.overflow === 'hidden')) {
+        document.documentElement.style.overflow = '';
+        document.body.style.overflow = '';
+        chrome.runtime.sendMessage({ type: 'adWall', status: 'hidden' }).catch(() => {});
+        return;
+      }
       const nodes = [...document.querySelectorAll('body *')].slice(0, 700);
       let hidden = false;
       for (const el of nodes) {
-        const text = (el.innerText || '').slice(0, 800);
+        const text = ((el.innerText || el.textContent) || '').slice(0, 800);
         if (!WORDS.test(text)) continue;
         const s = getComputedStyle(el);
         const z = Number.parseInt(s.zIndex || '0', 10) || 0;

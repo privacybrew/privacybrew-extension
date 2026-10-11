@@ -115,9 +115,10 @@
     text($('homeAdsSub'), `${report.adTrackerCount || 0} ad trackers`);
     text($('homeScriptsNumber'), String(report.outsideScriptCount || 0));
     text($('homeScriptsSub'), `${off ? 0 : (report.outsideScriptBlockedCount || 0)} blocked`);
-    text($('homeCookies'), cookiePopup.status === 'none' ? 'No pop-up' : cookiePopup.label);
+    text($('homeCookiesValue'), cookiePopup.status === 'none' ? 'None' : cookiePopup.label.replace(' for you', ''));
     text($('homeCookiesSub'), `${(report.cookieDomains || []).length} third-party cookie ${plural((report.cookieDomains || []).length, 'website')}`);
-    text($('homeFingerprint'), fingerprintCount ? `${fingerprintCount} ${plural(fingerprintCount, 'method')}` : 'None found');
+    text($('homeFingerprintNumber'), fingerprintCount ? String(fingerprintCount) : 'None');
+    text($('homeFingerprintWord'), fingerprintCount ? plural(fingerprintCount, 'method') : '');
     text($('privacyRequestsRow'), `${settings.gpcEnabled ? 'GPC sent' : 'GPC off'} · ${settings.dntEnabled ? 'DNT sent' : 'DNT off'}`);
     $('powerButton').classList.toggle('off', off);
   }
@@ -249,6 +250,11 @@
     $('backButton').addEventListener('click', () => showView('home'));
     $('privacyRequestsRow').addEventListener('click', () => showView('settings'));
     $('powerButton').addEventListener('click', togglePowerMenu);
+    $('forAWhileButton').addEventListener('click', () => {
+      const submenu = $('forAWhileSubmenu');
+      submenu.hidden = !submenu.hidden;
+      $('forAWhileButton').setAttribute('aria-expanded', submenu.hidden ? 'false' : 'true');
+    });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closePowerMenu(); });
 
     $('sitePowerButton').addEventListener('click', async () => {

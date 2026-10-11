@@ -441,7 +441,7 @@ def run_e2e(cdp):
     time.sleep(4)
     hidden_tab_id, _ = storage_report(cdp, sw_session)
     hidden_report = summarize_state(cdp, sw_session, hidden_tab_id)
-    checks.append(('ad wall hidden reports', hidden_report.get('adWall') in ['hidden','detected']))
+    checks.append(('ad wall hidden reports', hidden_report.get('adWall') in ['hidden', 'detected']))
     checks.append(('ad wall hidden restores scroll', eval_value(cdp, hidden_session, "document.body.style.overflow === '' && document.documentElement.style.overflow === ''") is True))
     cdp.call('Runtime.evaluate', {'expression': "setOffUntilRestart(true)", 'awaitPromise': True}, sw_session)
     restart_settings = eval_value(cdp, sw_session, 'getSettings()')
@@ -518,7 +518,7 @@ def run_e2e(cdp):
     checks.append(('popup allowed tile', 'allowed' in popup_text(cdp, popup_session, '#homeTrackersSub')))
     checks.append(('popup ad tile', int(popup_text(cdp, popup_session, '#homeAdsNumber')) >= 0))
     checks.append(('popup outside script tile', popup_text(cdp, popup_session, '#homeScriptsSub').endswith('blocked')))
-    checks.append(('popup fingerprint tile', popup_text(cdp, popup_session, '#homeFingerprint') == '4 methods'))
+    checks.append(('popup fingerprint tile', popup_text(cdp, popup_session, '#homeFingerprintNumber') == '4'))
     time.sleep(0.5)
     shot = cdp.call('Page.captureScreenshot', {'format': 'png', 'captureBeyondViewport': True}, popup_session)['data']
     shot_path = ART / 'pb-ext-popup.png'
@@ -591,7 +591,7 @@ def run_e2e(cdp):
     checks.append(('clean tracker tile zero', popup_text(cdp, clean_popup_session, '#homeTrackersNumber') == '0'))
     checks.append(('clean blocked tile zero', '0 blocked' in popup_text(cdp, clean_popup_session, '#homeTrackersSub')))
     checks.append(('clean allowed tile zero', '0 allowed' in popup_text(cdp, clean_popup_session, '#homeTrackersSub')))
-    checks.append(('clean fingerprint tile none', popup_text(cdp, clean_popup_session, '#homeFingerprint') == 'None found'))
+    checks.append(('clean fingerprint tile none', popup_text(cdp, clean_popup_session, '#homeFingerprintNumber') == 'None'))
     clean_shot = cdp.call('Page.captureScreenshot', {'format': 'png', 'captureBeyondViewport': True}, clean_popup_session)['data']
     clean_shot_path = ART / 'pb-ext-popup-clean.png'
     clean_shot_path.write_bytes(base64.b64decode(clean_shot))
