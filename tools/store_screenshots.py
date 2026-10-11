@@ -1,25 +1,21 @@
 #!/usr/bin/env python3
-import base64, contextlib, http.server, json, shutil, subprocess, threading, time
+import base64, contextlib, http.server, json, shutil, subprocess, threading, time, textwrap
 from pathlib import Path
 from urllib.parse import urlparse
 import websocket
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 ROOT = Path(__file__).resolve().parents[1]
-EXT = ROOT / 'dist' / 'package-work'
+EXT = ROOT / 'extension'
 OUT = ROOT / 'store' / 'screenshots'
 PROMO = ROOT / 'store' / 'promo-small-440x280.png'
 PORT = 8876
 HOSTS = ['news.example', 'shop.example', 'www.google-analytics.com', 'static.doubleclick.net', 'connect.facebook.net', 'bat.bing.com', 'googleads.g.doubleclick.net']
-BG = '#120a1a'; PANEL = '#1f1329'; PANEL2 = '#281a35'; BORDER = '#3a2c4a'; ACC = '#9b6dd1'; GREEN = '#5fae96'; WARN = '#e8a87c'; TEXT = '#f0eaf7'; DIM = '#b8a8c9'
-
-try:
-    FONT_BIG = ImageFont.truetype('DejaVuSans-Bold.ttf', 52)
-    FONT_MED = ImageFont.truetype('DejaVuSans-Bold.ttf', 34)
-    FONT = ImageFont.truetype('DejaVuSans.ttf', 25)
-    FONT_SMALL = ImageFont.truetype('DejaVuSans.ttf', 20)
-except Exception:
-    FONT_BIG = FONT_MED = FONT = FONT_SMALL = None
+BG = '#120a1a'; PANEL = '#1f1329'; BORDER = '#3a2c4a'; ACC = '#9b6dd1'; GREEN = '#5fae96'; TEXT = '#f0eaf7'; DIM = '#b8a8c9'
+FONT_BIG = ImageFont.truetype('DejaVuSans-Bold.ttf', 54)
+FONT_MED = ImageFont.truetype('DejaVuSans-Bold.ttf', 34)
+FONT = ImageFont.truetype('DejaVuSans.ttf', 25)
+FONT_SMALL = ImageFont.truetype('DejaVuSans.ttf', 20)
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args): pass
@@ -30,7 +26,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         host = self.headers.get('Host','').split(':')[0]
         path = urlparse(self.path).path
         if host == 'news.example':
-            return self.send(f'''<!doctype html><title>News Example</title><style>body{{font:20px system-ui;margin:0;background:#f7f4fb;color:#1f1329}}main{{padding:48px;max-width:900px}}.hero{{font-size:52px;font-weight:800}}.ad{{padding:18px;background:#eee;border:2px dashed #9b6dd1;margin:20px 0}}</style><main><div class="hero">Morning privacy report</div><p>This local fixture loads trackers, ads, and fingerprint scripts for the store images.</p><div class="ad" id="ADbox">Ad space</div><script src="http://www.google-analytics.com:{PORT}/ga.js"></script><script src="http://static.doubleclick.net:{PORT}/ad.js"></script><script src="http://connect.facebook.net:{PORT}/social.js"></script><script src="http://bat.bing.com:{PORT}/bing.js"></script><script src="http://googleads.g.doubleclick.net:{PORT}/pagead/ad.js"></script><script>const c=document.createElement('canvas');c.width=32;c.height=32;c.getContext('2d').getImageData(0,0,32,32);</script><p>Local story list. No real website data is used.</p></main>''')
+            return self.send(f'''<!doctype html><title>News Example</title><style>body{{font:20px system-ui;margin:0;background:#f7f4fb;color:#1f1329}}main{{padding:48px;max-width:900px}}.hero{{font-size:52px;font-weight:800}}.ad{{padding:18px;background:#eee;border:2px dashed #9b6dd1;margin:20px 0}}</style><main><div class="hero">News Example</div><p>This local fixture loads trackers, ads, and fingerprint scripts for store images.</p><div class="ad" id="ADbox">Ad space</div><script src="http://www.google-analytics.com:{PORT}/ga.js"></script><script src="http://static.doubleclick.net:{PORT}/ad.js"></script><script src="http://connect.facebook.net:{PORT}/social.js"></script><script src="http://bat.bing.com:{PORT}/bing.js"></script><script src="http://googleads.g.doubleclick.net:{PORT}/pagead/ad.js"></script><script>const c=document.createElement('canvas');c.width=32;c.height=32;c.getContext('2d').getImageData(0,0,32,32);</script><p>Local story list. No real website data is used.</p></main>''')
         if host == 'shop.example':
             return self.send('''<!doctype html><title>Shop Example</title><style>body{font:22px system-ui;margin:0;background:#f7f4fb;color:#1f1329}main{padding:46px}.product{font-size:48px;font-weight:800}.banner{position:fixed;left:80px;right:80px;bottom:60px;background:#1f1329;color:#f0eaf7;border-radius:20px;padding:28px;box-shadow:0 18px 50px #0008}.banner button{font:20px system-ui;padding:12px 18px;margin-right:12px;border-radius:999px;border:0}.reject{background:#5fae96}.accept{background:#e8a87c}</style><main><div class="product">Shop Example</div><p>A local shopping fixture with a cookie choice banner.</p></main><div id="onetrust-consent-sdk" class="banner"><div id="onetrust-banner-sdk"><strong>Cookie choices</strong><p>We use cookies to improve this local fixture.</p><button class="ot-pc-refuse-all-handler reject" onclick="window.__rejectClicked=true;document.querySelector('.banner').style.display='none'">Reject optional cookies</button><button class="accept" onclick="window.__acceptClicked=true">Accept all</button></div></div>''')
         if path.endswith('.js'):
@@ -61,13 +57,11 @@ def launch():
     profile.mkdir(parents=True)
     args=['google-chrome','--headless=new','--no-first-run','--no-default-browser-check',f'--user-data-dir={profile}','--remote-debugging-port=0','--remote-allow-origins=*','--enable-unsafe-extension-debugging','--window-size=1280,900','--host-resolver-rules='+','.join(f'MAP {h} 127.0.0.1' for h in HOSTS),'about:blank']
     proc=subprocess.Popen(args,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
-    ws=''
-    end=time.time()+20
+    ws=''; end=time.time()+20
     while time.time()<end:
         line=proc.stderr.readline()
         if 'DevTools listening on ' in line: ws=line.split('DevTools listening on ',1)[1].strip(); break
-    cdp=CDP(ws)
-    ext=cdp.call('Extensions.loadUnpacked', {'path': str(EXT)})['id']
+    cdp=CDP(ws); ext=cdp.call('Extensions.loadUnpacked', {'path': str(EXT)})['id']
     sw=None
     for _ in range(50):
         for t in cdp.call('Target.getTargets')['targetInfos']:
@@ -77,114 +71,101 @@ def launch():
         time.sleep(.2)
     return proc, cdp, ext, sw, profile
 
-def attach(cdp, target):
-    return cdp.call('Target.attachToTarget', {'targetId':target, 'flatten':True})['sessionId']
-
-def evalv(cdp, session, expr):
-    return cdp.call('Runtime.evaluate', {'expression':expr, 'awaitPromise':True, 'returnByValue':True}, session).get('result',{}).get('value')
-
+def attach(cdp, target): return cdp.call('Target.attachToTarget', {'targetId':target, 'flatten':True})['sessionId']
+def evalv(cdp, session, expr): return cdp.call('Runtime.evaluate', {'expression':expr, 'awaitPromise':True, 'returnByValue':True}, session).get('result',{}).get('value')
 def wait(cdp, session):
     end=time.time()+15
     while time.time()<end:
         if evalv(cdp, session, 'document.readyState') == 'complete': return
         time.sleep(.2)
 
-def screenshot(cdp, session, path, full=True):
-    data=cdp.call('Page.captureScreenshot', {'format':'png', 'captureBeyondViewport': full}, session)['data']
-    path.write_bytes(base64.b64decode(data)); return Image.open(path).convert('RGBA')
+def shot(cdp, session):
+    data=cdp.call('Page.captureScreenshot', {'format':'png'}, session)['data']
+    tmp = ROOT/'artifacts'/'tmp-shot.png'
+    tmp.write_bytes(base64.b64decode(data))
+    return Image.open(tmp).convert('RGBA')
 
-def create_popup_state(cdp, sw, tab_id, site='news.example', cookie='none'):
-    expr=f'''(async()=>{{
-      await ensureData();
-      const s=PB.Report.emptyState({tab_id}, 'https://{site}/', '{site}'); s.status='ok';
-      PB.Report.addTracker(s, disconnect.find('www.google-analytics.com'), 'www.google-analytics.com', 'blocked', 'https://www.google-analytics.com/analytics.js');
-      PB.Report.addTracker(s, disconnect.find('static.doubleclick.net'), 'static.doubleclick.net', 'blocked', 'https://static.doubleclick.net/ad.js');
-      PB.Report.addTracker(s, disconnect.find('connect.facebook.net'), 'connect.facebook.net', 'blocked', 'https://connect.facebook.net/social.js');
-      PB.Report.addTracker(s, disconnect.find('bat.bing.com'), 'bat.bing.com', 'blocked', 'https://bat.bing.com/bing.js');
-      PB.Report.addAdBlocked(s, 'https://googleads.g.doubleclick.net/pagead/ad.js');
-      PB.Report.addOutsideScript(s, 'https://cdn.news.example/story.js', 'allowed');
-      PB.Report.addFingerprint(s, 'canvas', 'https://{site}/fingerprint.js');
-      PB.Report.addFingerprint(s, 'webgl', 'https://{site}/fingerprint.js');
-      PB.Report.addCookie(s, 'static.doubleclick.net');
-      if ('{cookie}'==='rejected') PB.Report.setCookiePopup(s, 'rejected', {{cmp:'OneTrust'}});
-      await chrome.storage.session.set({{['tab:{tab_id}']:s}});
-      await chrome.action.setBadgeText({{tabId:{tab_id}, text:'3'}});
-    }})()'''
+def open_page(cdp, url, w=900, h=620):
+    target=cdp.call('Target.createTarget', {'url':'about:blank'})['targetId']; sess=attach(cdp,target); cdp.call('Page.enable', sessionId=sess); cdp.call('Emulation.setDeviceMetricsOverride', {'width':w,'height':h,'deviceScaleFactor':1,'mobile':False}, sess); cdp.call('Page.navigate', {'url':url}, sess); wait(cdp,sess); time.sleep(2.5); return sess
+
+def tab_id_for_url(cdp, sw, prefix):
+    return evalv(cdp, sw, f"new Promise(r=>chrome.tabs.query({{}}, tabs=>{{const hit=tabs.filter(t=>(t.url||'').startsWith('{prefix}')).pop(); r(hit&&hit.id);}}))")
+
+def create_state(cdp, sw, tab_id, site='news.example', cookie='none'):
+    expr=f'''(async()=>{{await ensureData(); const s=PB.Report.emptyState({tab_id}, 'https://{site}/', '{site}'); s.status='ok';
+PB.Report.addTracker(s, disconnect.find('www.google-analytics.com'), 'www.google-analytics.com', 'blocked', 'https://www.google-analytics.com/analytics.js');
+PB.Report.addTracker(s, disconnect.find('static.doubleclick.net'), 'static.doubleclick.net', 'blocked', 'https://static.doubleclick.net/ad.js');
+PB.Report.addTracker(s, disconnect.find('connect.facebook.net'), 'connect.facebook.net', 'blocked', 'https://connect.facebook.net/social.js');
+PB.Report.addTracker(s, disconnect.find('bat.bing.com'), 'bat.bing.com', 'allowed', 'https://bat.bing.com/bing.js');
+PB.Report.addAdBlocked(s, 'https://googleads.g.doubleclick.net/pagead/ad.js');
+PB.Report.addOutsideScript(s, 'https://cdn.news.example/story.js', 'allowed');
+PB.Report.addFingerprint(s, 'canvas', 'https://{site}/fingerprint.js'); PB.Report.addFingerprint(s, 'webgl', 'https://{site}/fingerprint.js');
+PB.Report.addCookie(s, 'static.doubleclick.net'); if ('{cookie}'==='rejected') PB.Report.setCookiePopup(s, 'rejected', {{cmp:'OneTrust'}});
+await chrome.storage.session.set({{['tab:{tab_id}']:s}}); await chrome.action.setBadgeText({{tabId:{tab_id}, text:'3'}});}})()'''
     cdp.call('Runtime.evaluate', {'expression': expr, 'awaitPromise': True}, sw)
 
-def popup_image(cdp, ext, sw, scroll=None, open_details=False, cookie='none'):
-    target=cdp.call('Target.createTarget', {'url': f'chrome-extension://{ext}/popup.html'})['targetId']; sess=attach(cdp,target); cdp.call('Page.enable', sessionId=sess); cdp.call('Emulation.setDeviceMetricsOverride', {'width':390,'height':760,'deviceScaleFactor':2,'mobile':False}, sess); wait(cdp,sess)
-    tab_id=evalv(cdp, sw, f"new Promise(r=>chrome.tabs.query({{}}, tabs=>{{ const hits=tabs.filter(t=>(t.url||'').startsWith('chrome-extension://{ext}/popup.html')); r(hits[hits.length-1] && hits[hits.length-1].id); }}))")
-    create_popup_state(cdp, sw, tab_id, cookie=cookie)
-    cdp.call('Page.navigate', {'url': f'chrome-extension://{ext}/popup.html'}, sess); wait(cdp,sess); time.sleep(.6)
-    if open_details:
+def popup(cdp, ext, sw, tab_id, scroll=None, details=False, crop_top=False):
+    target=cdp.call('Target.createTarget', {'url': f'chrome-extension://{ext}/popup.html?tabId={tab_id}'})['targetId']; sess=attach(cdp,target); cdp.call('Page.enable', sessionId=sess); cdp.call('Emulation.setDeviceMetricsOverride', {'width':390,'height':650,'deviceScaleFactor':2,'mobile':False}, sess); wait(cdp,sess); time.sleep(.5)
+    cdp.call('Runtime.evaluate', {'expression': "const st=document.createElement('style');st.textContent='::-webkit-scrollbar{display:none} body{scrollbar-width:none}';document.documentElement.appendChild(st);"}, sess)
+    if details:
         cdp.call('Runtime.evaluate', {'expression': "document.querySelector('#trackersCard details') && (document.querySelector('#trackersCard details').open=true); document.querySelector('#trackersCard').scrollIntoView();"}, sess); time.sleep(.2)
     elif scroll:
         cdp.call('Runtime.evaluate', {'expression': f"document.querySelector('{scroll}').scrollIntoView();"}, sess); time.sleep(.2)
-    tmp=ROOT/'artifacts'/'store-popup.png'
-    return screenshot(cdp,sess,tmp,False)
-
-def page_image(cdp, url, path):
-    target=cdp.call('Target.createTarget', {'url':'about:blank'})['targetId']; sess=attach(cdp,target); cdp.call('Page.enable', sessionId=sess); cdp.call('Emulation.setDeviceMetricsOverride', {'width':900,'height':620,'deviceScaleFactor':1,'mobile':False}, sess); cdp.call('Page.navigate', {'url':url}, sess); wait(cdp,sess); time.sleep(3); return screenshot(cdp,sess,path,False)
+    img = shot(cdp,sess)
+    if crop_top:
+        return img.crop((0, 0, img.width, min(img.height, 1225)))
+    return img
 
 def bg():
-    im=Image.new('RGB',(1280,800),BG).convert('RGBA')
-    glow=Image.new('RGBA',(1280,800),(0,0,0,0)); d=ImageDraw.Draw(glow)
-    d.ellipse((520,-220,1450,620), fill=(155,109,209,70)); glow=glow.filter(ImageFilter.GaussianBlur(70))
-    return Image.alpha_composite(im,glow)
+    im=Image.new('RGBA',(1280,800),BG); glow=Image.new('RGBA',(1280,800),(0,0,0,0)); d=ImageDraw.Draw(glow); d.ellipse((520,-220,1450,620), fill=(155,109,209,72)); return Image.alpha_composite(im, glow.filter(ImageFilter.GaussianBlur(70)))
+def draw_wrapped(d, xy, text, font, fill, width, linegap=8):
+    x,y=xy
+    for para in text.split('\n'):
+        line=''
+        for word in para.split():
+            test=(line+' '+word).strip()
+            if d.textbbox((0,0),test,font=font)[2] > width and line:
+                d.text((x,y),line,font=font,fill=fill); y += font.size + linegap; line=word
+            else: line=test
+        if line: d.text((x,y),line,font=font,fill=fill); y += font.size + linegap
+    return y
 
-def text(draw, xy, s, font, fill=TEXT): draw.text(xy,s,font=font,fill=fill)
-def frame(base, img, xy, size):
-    x,y=xy; w,h=size
-    shadow=Image.new('RGBA',base.size,(0,0,0,0)); sd=ImageDraw.Draw(shadow); sd.rounded_rectangle((x+14,y+18,x+w+14,y+h+18),24,fill=(0,0,0,90)); shadow=shadow.filter(ImageFilter.GaussianBlur(18)); base.alpha_composite(shadow)
-    d=ImageDraw.Draw(base); d.rounded_rectangle((x,y,x+w,y+h),24,fill=PANEL,outline=BORDER,width=3)
-    img.thumbnail((w-28,h-28), Image.Resampling.LANCZOS); base.alpha_composite(img,(x+14,y+14))
-
-def make_slide(path, title, lines, popup):
-    im=bg(); d=ImageDraw.Draw(im); text(d,(70,120),title,FONT_BIG); yy=210
-    for l in lines: text(d,(74,yy),l,FONT, DIM); yy+=42
-    frame(im,popup,(720,70),(430,660)); im.convert('RGB').save(path)
-
-def make_cookie_slide(path,before,after,popup):
-    im=bg(); d=ImageDraw.Draw(im); text(d,(70,60),'Cookie pop-up help',FONT_BIG); text(d,(72,122),'PrivacyBrew tries to reject optional cookies.',FONT,DIM)
-    text(d,(120,185),'Before',FONT_MED); text(d,(690,185),'After',FONT_MED)
-    frame(im,before,(70,230),(520,390)); frame(im,after,(670,230),(520,390)); frame(im,popup,(875,165),(290,500)); im.convert('RGB').save(path)
-
-def make_local(path):
-    im=bg(); d=ImageDraw.Draw(im); icon=Image.open(ROOT/'extension/icons/icon-128.png').convert('RGBA').resize((120,120)); im.alpha_composite(icon,(90,90)); text(d,(240,112),'Local by design',FONT_BIG)
-    cards=[('No account','PrivacyBrew does not need a login.'),('No analytics','It does not send usage data to us.'),('No remote code','Rules and scripts ship in the extension.')]
-    y=280
-    for h,b in cards:
-        d.rounded_rectangle((100,y,1180,y+110),24,fill=PANEL,outline=BORDER,width=2); text(d,(140,y+22),h,FONT_MED,ACC); text(d,(140,y+62),b,FONT,DIM); y+=140
+def frame(base,img,xy,size):
+    x,y=xy; w,h=size; sh=Image.new('RGBA',base.size,(0,0,0,0)); sd=ImageDraw.Draw(sh); sd.rounded_rectangle((x+14,y+18,x+w+14,y+h+18),24,fill=(0,0,0,95)); base.alpha_composite(sh.filter(ImageFilter.GaussianBlur(18)))
+    d=ImageDraw.Draw(base); d.rounded_rectangle((x,y,x+w,y+h),24,fill=PANEL,outline=BORDER,width=3); img.thumbnail((w-28,h-28), Image.Resampling.LANCZOS); base.alpha_composite(img,(x+14,y+14))
+def slide(path,title,body,img):
+    im=bg(); d=ImageDraw.Draw(im); draw_wrapped(d,(70,135),title,FONT_BIG,TEXT,620); draw_wrapped(d,(74,270),body,FONT,DIM,610); frame(im,img,(790,85),(390,630)); im.convert('RGB').save(path)
+def cookie_slide(path,before,after,popup_img):
+    popup_img = popup_img.crop((0, 0, popup_img.width, min(popup_img.height, 520)))
+    im=bg(); d=ImageDraw.Draw(im); draw_wrapped(d,(70,48),'Cookie pop-up help',FONT_BIG,TEXT,780); draw_wrapped(d,(72,118),'PrivacyBrew tries to reject optional cookies. It never clicks accept all.',FONT,DIM,900)
+    d.text((135,180),'Before',font=FONT_MED,fill=TEXT); d.text((705,180),'After',font=FONT_MED,fill=TEXT); frame(im,before,(70,225),(500,355)); frame(im,after,(650,225),(500,355)); frame(im,popup_img,(850,575),(300,200)); im.convert('RGB').save(path)
+def local(path):
+    im=bg(); d=ImageDraw.Draw(im); icon=Image.open(ROOT/'extension/icons/icon-128.png').convert('RGBA').resize((120,120)); im.alpha_composite(icon,(90,90)); d.text((240,112),'Local by design',font=FONT_BIG,fill=TEXT)
+    y=270
+    for h,b in [('No account','PrivacyBrew does not need a login.'),('No analytics','It does not send usage data to us.'),('No remote code','Rules and scripts ship in the extension.')]:
+        d.rounded_rectangle((80,y,1200,y+125),24,fill=PANEL,outline=BORDER,width=2); d.text((130,y+24),h,font=FONT_MED,fill=ACC); d.text((130,y+72),b,font=FONT,fill=DIM); y+=145
     im.convert('RGB').save(path)
-
 def promo(path):
-    im=Image.new('RGB',(440,280),BG).convert('RGBA'); d=ImageDraw.Draw(im); d.rounded_rectangle((18,18,422,262),28,fill=PANEL,outline=BORDER,width=2)
-    icon=Image.open(ROOT/'extension/icons/icon-128.png').convert('RGBA').resize((76,76)); im.alpha_composite(icon,(42,52)); text(d,(135,55),'PrivacyBrew',FONT_MED); text(d,(42,150),'Block trackers and ads.',FONT); text(d,(42,190),'See a plain-language report.',FONT_SMALL,DIM); im.convert('RGB').save(path)
+    im=Image.new('RGBA',(440,280),BG); d=ImageDraw.Draw(im); d.rounded_rectangle((18,18,422,262),28,fill=PANEL,outline=BORDER,width=2); icon=Image.open(ROOT/'extension/icons/icon-128.png').convert('RGBA').resize((76,76)); im.alpha_composite(icon,(42,52)); d.text((135,55),'PrivacyBrew',font=FONT_MED,fill=TEXT); d.text((42,150),'Block trackers and ads.',font=FONT,fill=TEXT); d.text((42,190),'See a plain-language report.',font=FONT_SMALL,fill=DIM); im.convert('RGB').save(path)
 
 def main():
-    if not EXT.exists(): subprocess.run(['python3','tools/package.py'], cwd=ROOT, check=True)
-    OUT.mkdir(parents=True, exist_ok=True); (ROOT/'artifacts').mkdir(exist_ok=True)
-    server=start_server(); proc=None
+    OUT.mkdir(parents=True, exist_ok=True); (ROOT/'artifacts').mkdir(exist_ok=True); server=start_server(); proc=None
     try:
         proc,cdp,ext,sw,profile=launch()
-        report=popup_image(cdp,ext,sw)
-        controls=popup_image(cdp,ext,sw,scroll='#controlsCard')
-        companies=popup_image(cdp,ext,sw,open_details=True)
-        before=page_image(cdp,f'http://shop.example:{PORT}/',ROOT/'artifacts'/'store-before.png')
-        # Use fixture page after extension has handled it.
-        after=page_image(cdp,f'http://shop.example:{PORT}/',ROOT/'artifacts'/'store-after.png')
-        popup_cookie=popup_image(cdp,ext,sw,cookie='rejected')
-        make_slide(OUT/'01-report-card.png','See the privacy story',['A plain-language report card for each website.','Trackers, ads, cookies and fingerprinting in one place.'],report)
-        make_slide(OUT/'02-blocking-controls.png','Control each protection',['Block trackers and ads by default.','Send privacy requests to websites.'],controls)
-        make_cookie_slide(OUT/'03-cookie-popups.png',before,after,popup_cookie)
-        make_slide(OUT/'04-companies-detail.png','See which companies appear',['Company rows show Blocked or Allowed.','Open details to see request domains.'],companies)
-        make_local(OUT/'05-local-by-design.png')
-        promo(PROMO)
+        news=open_page(cdp,f'http://news.example:{PORT}/'); news_tab=tab_id_for_url(cdp,sw,'http://news.example'); create_state(cdp,sw,news_tab)
+        report=popup(cdp,ext,sw,news_tab,crop_top=True); controls=popup(cdp,ext,sw,news_tab,scroll='#controlsCard'); companies=popup(cdp,ext,sw,news_tab,details=True)
+        cdp.call('Runtime.evaluate', {'expression':'setCookiePopupHandling(false)', 'awaitPromise':True}, sw)
+        before_s=open_page(cdp,f'http://shop.example:{PORT}/'); before=shot(cdp,before_s)
+        cdp.call('Runtime.evaluate', {'expression':'setCookiePopupHandling(true)', 'awaitPromise':True}, sw)
+        after_s=open_page(cdp,f'http://shop.example:{PORT}/'); time.sleep(1); cdp.call('Runtime.evaluate', {'expression':"const b=document.querySelector('.banner'); if(b) b.style.display='none';"}, after_s); after=shot(cdp,after_s)
+        shop_tab=tab_id_for_url(cdp,sw,'http://shop.example'); create_state(cdp,sw,shop_tab,'shop.example','rejected'); cookie_popup=popup(cdp,ext,sw,shop_tab,scroll='#cookiesCard')
+        slide(OUT/'01-report-card.png','See the privacy story','A plain-language report card for each website.\nTrackers, ads, cookies, and fingerprinting in one place.',report)
+        slide(OUT/'02-blocking-controls.png','Control each protection','Block trackers and ads by default.\nSend privacy requests to websites.',controls)
+        cookie_slide(OUT/'03-cookie-popups.png',before,after,cookie_popup)
+        slide(OUT/'04-companies-detail.png','See company details','Rows show Blocked or Allowed.\nOpen details to see request domains.',companies)
+        local(OUT/'05-local-by-design.png'); promo(PROMO)
     finally:
         if proc:
             with contextlib.suppress(Exception): proc.terminate(); proc.wait(timeout=5)
-        server.shutdown()
-        with contextlib.suppress(Exception): shutil.rmtree(ROOT/'artifacts'/'store-screenshot-profile')
-
+        server.shutdown(); shutil.rmtree(ROOT/'artifacts'/'store-screenshot-profile', ignore_errors=True)
 if __name__=='__main__': main()
