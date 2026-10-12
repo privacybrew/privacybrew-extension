@@ -23,3 +23,11 @@ PrivacyBrew uses no remote code. Autoconsent snippets are bundled and allowliste
 ## After approval
 
 TODO: Update the website button from Coming soon to the Chrome Web Store URL.
+
+
+## Status
+
+- 2026-10-12: Version 1.0.0 submitted to the Chrome Web Store for review.
+  ZIP SHA-256: 56525c94c5e301b2be8d03d761d63d3e0abf0fc3e570ddc688617e5f2145ddd0
+  Expect an in-depth review (broad host permissions). Watch privacybrew@protonmail.com.
+- Next after approval: replace "Coming soon" buttons on privacybrew.app (index.html Tools card, extension.html hero and closing card) with the store URL; add the store link to README.
