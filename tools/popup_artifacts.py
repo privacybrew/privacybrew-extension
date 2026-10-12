@@ -6,6 +6,8 @@ import websocket
 ROOT = Path(__file__).resolve().parents[1]
 EXT = ROOT / 'extension'
 ART = ROOT / 'artifacts'
+# --scale 2 renders sharp images for the website; layout checks use CSS pixels, so they still apply.
+SCALE = 2 if '--scale' in __import__('sys').argv and '2' in __import__('sys').argv else 1
 ART.mkdir(exist_ok=True)
 
 class CDP:
@@ -71,7 +73,7 @@ return s;
         raise RuntimeError(res['exceptionDetails'])
 
 def open_popup(cdp, ext, sw, name, action=None, state='normal'):
-    target=cdp.call('Target.createTarget', {'url': f'chrome-extension://{ext}/popup.html'})['targetId']; sess=attach(cdp,target); cdp.call('Page.enable', sessionId=sess); cdp.call('Emulation.setDeviceMetricsOverride', {'width':380,'height':580,'deviceScaleFactor':1,'mobile':False}, sess)
+    target=cdp.call('Target.createTarget', {'url': f'chrome-extension://{ext}/popup.html'})['targetId']; sess=attach(cdp,target); cdp.call('Page.enable', sessionId=sess); cdp.call('Emulation.setDeviceMetricsOverride', {'width':380,'height':580,'deviceScaleFactor':SCALE,'mobile':False}, sess)
     time.sleep(.5)
     tab_id = 424242 + abs(hash(name)) % 10000
     create_state(cdp, sw, tab_id, state=state)
