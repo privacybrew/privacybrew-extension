@@ -25,12 +25,12 @@
     "alarms"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "*://*/*"
   ],
   "content_scripts": [
     {
       "matches": [
-        "<all_urls>"
+        "*://*/*"
       ],
       "js": [
         "content-main.js"
@@ -42,7 +42,7 @@
     },
     {
       "matches": [
-        "<all_urls>"
+        "*://*/*"
       ],
       "js": [
         "content-bridge.js"
@@ -53,7 +53,7 @@
     },
     {
       "matches": [
-        "<all_urls>"
+        "*://*/*"
       ],
       "js": [
         "ad-cosmetic.js"
@@ -64,7 +64,7 @@
     },
     {
       "matches": [
-        "<all_urls>"
+        "*://*/*"
       ],
       "js": [
         "vendor/autoconsent/content.bundle.js"
@@ -75,7 +75,7 @@
     },
     {
       "matches": [
-        "<all_urls>"
+        "*://*/*"
       ],
       "js": [
         "cookie-fallback.js"
@@ -86,7 +86,7 @@
     },
     {
       "matches": [
-        "<all_urls>"
+        "*://*/*"
       ],
       "js": [
         "ad-wall.js"
@@ -156,7 +156,7 @@
         "data/easylist_generic.css"
       ],
       "matches": [
-        "<all_urls>"
+        "*://*/*"
       ]
     }
   ],

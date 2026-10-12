@@ -21,15 +21,15 @@ Used to register small scripts that ship with the extension: they set navigator.
 ## alarms
 Used for the "Turn off for a while" option (15 minutes or 1 hour). An alarm turns protection back on when the time ends, even if the popup is closed. No data is collected or sent.
 
-## Host permission (<all_urls>)
-Trackers and ads can appear on any website, so PrivacyBrew needs access to the websites the user opens to block them, to build the report card for that website, to detect fingerprinting scripts, to hide empty ad spaces and to answer cookie pop-ups. All processing happens in the browser. PrivacyBrew has no server and does not collect or send browsing data. The user can turn PrivacyBrew off for any website.
+## Host permission (*://*/*)
+PrivacyBrew asks only for http and https websites (*://*/*), not local files. Trackers and ads can appear on any website, so it needs access to the websites the user opens to block them, to build the report card for that website, to detect fingerprinting scripts, to hide empty ad spaces and to answer cookie pop-ups. All processing happens in the browser. PrivacyBrew has no server and does not collect or send browsing data. The user can turn PrivacyBrew off for any website.
 
 ## Remote code
 No, I am not using remote code. All JavaScript, rule lists and the autoconsent rules are bundled in the package.
 
 ## Data usage
 Leave all data types unticked. PrivacyBrew processes page requests locally to show the report card and to block trackers; this data is not collected, stored on a server, or sent to the developer or anyone else.
-Feedback: the popup's Feedback link opens privacybrew.app/feedback.html only when the user clicks it. The extension version and browser name are passed if the user leaves that box ticked; the page address (website and path only) only if the user ticks that box. The user then chooses to submit the form on the website (handled by Tally). This is user-initiated and described in the privacy policy.
+Feedback: the popup's Feedback link opens privacybrew.app/feedback.html only when the user clicks it. It never includes the page the user was on. It passes the extension version and browser name only if the user leaves that box ticked.
 
 Certifications: tick all three.
 

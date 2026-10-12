@@ -22,7 +22,10 @@ PrivacyBrew blocks known tracker and ad requests with static rules. It also send
 
 PrivacyBrew registers or removes small main-world content scripts for GPC and DNT. It also uses scripting for selected cookie pop-up rules that need page-world checks. These scripts run only in the sender tab and frame.
 
-## Host permissions: `<all_urls>`
+## Host permissions: `*://*/*`
+
+PrivacyBrew asks only for `http` and `https` websites (`*://*/*`), not `<all_urls>`. It does not need local files or other schemes. See https://developer.chrome.com/docs/extensions/develop/concepts/match-patterns.
+
 
 PrivacyBrew must observe requests on any website the user opens. This permission also lets the content script watch fingerprinting APIs on pages.
 

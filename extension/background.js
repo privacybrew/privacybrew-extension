@@ -155,7 +155,7 @@ async function applyMainWorldScript(scriptId, scriptFile, enabled) {
     try {
       await chrome.scripting.registerContentScripts([{
         id: scriptId,
-        matches: ['<all_urls>'],
+        matches: ['*://*/*'],
         js: [scriptFile],
         runAt: 'document_start',
         allFrames: true,
@@ -497,15 +497,15 @@ chrome.webNavigation.onCommitted.addListener(resetOnTopFrame);
 
 chrome.webRequest.onBeforeRequest.addListener((details) => {
   observeRequest(details).catch(console.error);
-}, { urls: ['<all_urls>'] });
+}, { urls: ['*://*/*'] });
 
 chrome.webRequest.onErrorOccurred.addListener((details) => {
   observeBlocked(details).catch(console.error);
-}, { urls: ['<all_urls>'] });
+}, { urls: ['*://*/*'] });
 
 chrome.webRequest.onHeadersReceived.addListener((details) => {
   observeHeaders(details).catch(console.error);
-}, { urls: ['<all_urls>'] }, ['responseHeaders', 'extraHeaders']);
+}, { urls: ['*://*/*'] }, ['responseHeaders', 'extraHeaders']);
 
 
 function autoconsentConfig(enabled) {

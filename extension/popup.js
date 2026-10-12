@@ -217,15 +217,6 @@
     if (!list.children.length) list.appendChild(make('li', 'No websites are off.'));
   }
 
-  function originPath(url) {
-    try {
-      const parsed = new URL(url);
-      return parsed.origin + parsed.pathname;
-    } catch (_) {
-      return '';
-    }
-  }
-
   function browserLabel() {
     const brands = navigator.userAgentData && navigator.userAgentData.brands;
     const brand = brands && brands.find((item) => /Chrome/i.test(item.brand));
@@ -235,10 +226,7 @@
   }
 
   function renderFeedback() {
-    const page = originPath((currentReport && currentReport.url) || '');
-    const included = $('feedbackPage').checked;
-    text($('feedbackPageValue'), page ? (included ? page : `${page} (not included)`) : 'No page address.');
-    $('feedbackPageValue').classList.toggle('muted', !included);
+    // Feedback never includes the page address. The user can type it in the form if they want.
   }
 
   async function refresh() {
@@ -253,7 +241,6 @@
     for (const button of document.querySelectorAll('[data-detail]')) button.addEventListener('click', () => renderDetail(button.dataset.detail));
     $('settingsButton').addEventListener('click', () => showView('settings'));
     $('feedbackButton').addEventListener('click', () => { renderFeedback(); showView('feedback'); });
-    $('feedbackPage').addEventListener('change', renderFeedback);
     $('backButton').addEventListener('click', () => showView('home'));
     $('privacyRequestsRow').addEventListener('click', () => showView('settings'));
     $('powerButton').addEventListener('click', togglePowerMenu);
@@ -308,7 +295,6 @@
         params.set('v', chrome.runtime.getManifest().version);
         params.set('browser', browserLabel());
       }
-      if ($('feedbackPage').checked) params.set('page', originPath(currentReport.url || ''));
       await chrome.tabs.create({ url: 'https://privacybrew.app/feedback.html?' + params.toString() });
     });
   }

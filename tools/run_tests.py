@@ -519,6 +519,27 @@ def run_e2e(cdp):
     checks.append(('popup ad tile', int(popup_text(cdp, popup_session, '#homeAdsNumber')) >= 0))
     checks.append(('popup outside script tile', popup_text(cdp, popup_session, '#homeScriptsSub').endswith('blocked')))
     checks.append(('popup fingerprint tile', popup_text(cdp, popup_session, '#homeFingerprintNumber') == '4'))
+    # Feedback link: never includes the page address; version/browser only when ticked.
+    feedback = eval_value(cdp, popup_session, """(async () => {
+      const urls = [];
+      const real = chrome.tabs.create;
+      chrome.tabs.create = async (opts) => { urls.push(opts.url); return {}; };
+      document.querySelector('#feedbackButton').click();
+      const hasPageBox = !!document.querySelector('#feedbackPage');
+      document.querySelector('#openFeedback').click();
+      await new Promise(r => setTimeout(r, 200));
+      document.querySelector('#feedbackVersion').checked = false;
+      document.querySelector('#openFeedback').click();
+      await new Promise(r => setTimeout(r, 200));
+      chrome.tabs.create = real;
+      document.querySelector('#backButton').click();
+      return { hasPageBox, urls };
+    })()""")
+    fb_urls = (feedback or {}).get('urls', [])
+    checks.append(('feedback has no page address option', (feedback or {}).get('hasPageBox') is False))
+    checks.append(('feedback link never includes page', len(fb_urls) == 2 and all('page=' not in u and 'site.test' not in u for u in fb_urls)))
+    checks.append(('feedback link has version and browser when ticked', len(fb_urls) == 2 and 'v=' in fb_urls[0] and 'browser=' in fb_urls[0]))
+    checks.append(('feedback link has no details when unticked', len(fb_urls) == 2 and fb_urls[1].endswith('feedback.html?')))
     time.sleep(0.5)
     shot = cdp.call('Page.captureScreenshot', {'format': 'png', 'captureBeyondViewport': True}, popup_session)['data']
     shot_path = ART / 'pb-ext-popup.png'
