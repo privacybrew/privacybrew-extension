@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PrivacyBrew: Tracker & Ad Blocker",
-  "description": "See who tracks you on each website. Block trackers, ads and cookie pop-ups. All checks stay in your browser.",
+  "description": "The universe ain't giving you signs. They're targeted ads. See who tracks you and block trackers, ads and cookie pop-ups.",
   "version": "1.0.0",
   "action": {
     "default_title": "PrivacyBrew",

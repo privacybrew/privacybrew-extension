@@ -6,7 +6,7 @@ Paste these into the Store listing tab.
 
 PrivacyBrew: Tracker & Ad Blocker
 
-## Summary (132 characters max)
+## Summary (132 characters max; comes from the package description, cannot be edited in the dashboard)
 
 The universe ain't giving you signs. They're targeted ads. See who tracks you and block trackers, ads and cookie pop-ups.
 
