@@ -9,14 +9,14 @@
    Upload `store/store-icon-128.png` as the store icon (96x96 artwork with 16 px transparent padding, per Chrome guidelines).
 6. Additional fields: Homepage https://privacybrew.app/extension.html, Support URL https://privacybrew.app/feedback.html.
 7. Paste privacy answers from `store/PRIVACY_PRACTICES.md`.
-7. Distribution: public.
-8. Regions: all regions, unless you choose a smaller launch.
-9. Pricing: free.
-10. Trader status: use the existing non-trader declaration.
+8. Distribution: public.
+9. Regions: all regions, unless you choose a smaller launch.
+10. Pricing: free.
+11. Trader status: use the existing non-trader declaration.
 
 ## Review notes
 
-Broad host permissions can cause a longer in-depth review. The permission text explains why all websites are needed.
+Broad host permissions can cause a longer in-depth review. The permission text explains why websites (http and https) are needed.
 
 PrivacyBrew uses no remote code. Autoconsent snippets are bundled and allowlisted.
 
