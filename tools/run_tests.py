@@ -7,7 +7,7 @@ import websocket
 ROOT = Path(__file__).resolve().parents[1]
 EXT = ROOT / 'extension'
 ART = ROOT / 'artifacts'
-PORT = 8765
+PORT = 8796  # not 8765: that port is used by the website preview server
 HOSTS = ['site.test', 'clean.test', 'youtube.com', 'www.google-analytics.com', 'static.doubleclick.net', 'connect.facebook.net', 'bat.bing.com', '5min.com', 'cdn.some-unknown-thirdparty.example', 'googleads.g.doubleclick.net']
 HEADER_LOG = []
 HEADLESS = '--headed' not in sys.argv
