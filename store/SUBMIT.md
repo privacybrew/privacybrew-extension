@@ -5,6 +5,7 @@
 3. Paste the listing text from `store/LISTING.md`.
 4. Upload screenshots from `store/screenshots/`.
 5. Upload `store/promo-small-440x280.png` as the small promo tile.
+   Upload `store/store-icon-128.png` as the store icon (96x96 artwork with 16 px transparent padding, per Chrome guidelines).
 6. Paste privacy answers from `store/PRIVACY_PRACTICES.md`.
 7. Distribution: public.
 8. Regions: all regions, unless you choose a smaller launch.
