@@ -59,6 +59,6 @@ def main():
         doc.append('| ' + ' | '.join(str(v).replace('|','/') for v in r) + ' |')
     handled=sum(1 for r in rows if r[2] != 'No pop-up found')
     doc += ['', '## Summary','', f'- Sites checked: {len(rows)}', f'- Sites with a handled or hidden pop-up: {handled}', '- The runner did not click anything. Any click came from PrivacyBrew cookie pop-up handling.', '- Screenshots and raw JSON are in ignored `artifacts/pb-cookie-popups/`.']
-    (ROOT/'docs/COOKIE_POPUPS_2026-10-11.md').write_text('\n'.join(doc)+'\n')
+    (ROOT/'artifacts/COOKIE_POPUPS.md').write_text('\n'.join(doc)+'\n')
     print(json.dumps({'sites':len(rows),'handled':handled}, indent=2))
 if __name__=='__main__': main()

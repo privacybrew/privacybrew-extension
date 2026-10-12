@@ -322,7 +322,7 @@ def main():
     for row in rows:
         doc.append('| ' + ' | '.join('' if v is None else str(v).replace('|','/') for v in row) + ' |')
     doc += ['', '## Aggregate', '', f'- Sites tested: {len(by_site)}', f'- Valid sites: {len(by_site) - len(invalid)} / {len(by_site)}', f'- Median idle overhead vs baseline on valid sites: {median(overheads)} ms', f'- Worst idle overhead vs baseline on valid sites: {max(overheads) if overheads else None} ms', f'- Breakage suspects on valid sites: {", ".join(sorted(set(suspects))) if suspects else "None flagged by automated checks"}.', f'- Not tested sites: {", ".join(site for site, _ in invalid) if invalid else "None"}.', '- Counts can vary between visits on ad-heavy sites. With blocking on, blocked scripts cannot load more trackers. Some pages also retry or use fallback requests.']
-    (DOCS / 'REALSITE_TEST_2026-10-10.md').write_text('\n'.join(doc) + '\n', encoding='utf-8')
+    (ROOT / 'artifacts' / 'REALSITE_TEST.md').write_text('\n'.join(doc) + '\n', encoding='utf-8')
     print(json.dumps({'sites': len(by_site), 'medianOverheadMs': median(overheads), 'worstOverheadMs': max(overheads) if overheads else None, 'suspects': sorted(set(suspects))[:20]}, indent=2))
 
 if __name__ == '__main__':

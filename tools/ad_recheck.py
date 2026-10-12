@@ -63,6 +63,6 @@ def main():
     load=[r['onLoad']-r['offLoad'] for r in rows if r['onLoad'] is not None and r['offLoad'] is not None]
     req=[r['onReq']-r['offReq'] for r in rows if r['onReq'] is not None and r['offReq'] is not None]
     doc += ['', '## Summary','', f'- Sites checked: {len(rows)} with 3 fresh-profile runs per mode.', f'- Median DOMContentLoaded delta ads on vs off: {med(dcl)} ms', f'- Median load event delta ads on vs off: {med(load)} ms', f'- Median request-count delta ads on vs off: {med(req)}', f"- Highest cosmetic script time: {max(r['cosmetic'] for r in rows) if rows else 0} ms", '- YouTube homepage was checked only. This does not test or claim video-ad blocking.']
-    (ROOT/'docs/ADS_RECHECK_2026-10-10.md').write_text('\n'.join(doc)+'\n')
+    (ROOT/'artifacts/ADS_RECHECK.md').write_text('\n'.join(doc)+'\n')
     print(json.dumps({'sites':len(rows),'medianDclDelta':med(dcl),'medianLoadDelta':med(load),'medianRequestDelta':med(req),'maxCosmeticMs':max(r['cosmetic'] for r in rows) if rows else 0}, indent=2))
 if __name__=='__main__': main()
