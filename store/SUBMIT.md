@@ -5,8 +5,10 @@
 3. Paste the listing text from `store/LISTING.md`.
 4. Upload screenshots from `store/screenshots/`.
 5. Upload `store/promo-small-440x280.png` as the small promo tile.
+   Upload `store/marquee-1400x560.png` as the marquee image (optional; used only if Google features the extension).
    Upload `store/store-icon-128.png` as the store icon (96x96 artwork with 16 px transparent padding, per Chrome guidelines).
-6. Paste privacy answers from `store/PRIVACY_PRACTICES.md`.
+6. Additional fields: Homepage https://privacybrew.app/extension.html, Support URL https://privacybrew.app/feedback.html.
+7. Paste privacy answers from `store/PRIVACY_PRACTICES.md`.
 7. Distribution: public.
 8. Regions: all regions, unless you choose a smaller launch.
 9. Pricing: free.
