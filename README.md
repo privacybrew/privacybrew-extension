@@ -1,5 +1,7 @@
 # PrivacyBrew browser extension
 
+**Install:** [PrivacyBrew on the Chrome Web Store](https://chromewebstore.google.com/detail/privacybrew-tracker-ad-bl/hdhjekomkdacaliekmmdilaanalclhib) (works in Chrome, Edge and Brave).
+
 PrivacyBrew is a Chrome Manifest V3 prototype for Chrome, Edge, Brave, and Opera. It shows a plain-language privacy report card for the current website.
 
 This prototype blocks known trackers by default. It handles many cookie pop-ups, blocks ads, and detects third-party cookie attempts and some fingerprint methods. The extension makes no network requests of its own and uses only local data files.
