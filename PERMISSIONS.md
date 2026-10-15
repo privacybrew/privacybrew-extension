@@ -36,3 +36,13 @@ The extension does not request the `tabs` permission. It uses the active tab ID 
 ## Autoconsent eval bridge
 
 Some cookie pop-up rules need page-world checks. PrivacyBrew does not run remote code. It runs only fixed Autoconsent snippets that ship with the extension, and rejects all other eval requests.
+
+## Firefox notes
+
+The Firefox build asks for the same permissions and host permissions as the Chrome build.
+
+- Host permissions: Firefox 127 and newer grant `*://*/*` at install. The user can remove this access later in the add-on settings (Permissions). Then PrivacyBrew cannot see or block requests. The popup checks `permissions.contains` and shows "PrivacyBrew needs access to websites to protect you." The **Allow access** button calls `permissions.request({origins: ['*://*/*']})`.
+- Background: Firefox runs `background.js` as an event page (`background.scripts`), not a service worker. Reports stay in `storage.session`, so they survive when Firefox stops the idle event page.
+- Blocked requests: Firefox reports requests that a DNR rule blocks with the error `NS_ERROR_ABORT` in `webRequest.onErrorOccurred`. PrivacyBrew counts these, so it still does not need `declarativeNetRequestFeedback`.
+- Data collection: the manifest declares `"data_collection_permissions": {"required": ["none"]}`. PrivacyBrew sends no data.
+- Firefox Enhanced Tracking Protection can block some requests before PrivacyBrew sees them. Those requests do not show in the PrivacyBrew report.

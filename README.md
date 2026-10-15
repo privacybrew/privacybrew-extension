@@ -2,7 +2,9 @@
 
 **Install:** [PrivacyBrew on the Chrome Web Store](https://chromewebstore.google.com/detail/privacybrew-tracker-ad-bl/hdhjekomkdacaliekmmdilaanalclhib) (works in Chrome, Edge and Brave).
 
-PrivacyBrew is a Chrome Manifest V3 prototype for Chrome, Edge, Brave, and Opera. It shows a plain-language privacy report card for the current website.
+**Firefox:** Firefox Add-ons link coming soon. See [Firefox](#firefox).
+
+PrivacyBrew is a Manifest V3 prototype for Chrome, Edge, Brave, Opera, and Firefox. It shows a plain-language privacy report card for the current website.
 
 This prototype blocks known trackers by default. It handles many cookie pop-ups, blocks ads, and detects third-party cookie attempts and some fingerprint methods. The extension makes no network requests of its own and uses only local data files.
 
@@ -130,6 +132,46 @@ python3 tools/package_smoke.py
 The ZIP is written to `dist/`. The package step strips debug hooks and validates manifest files, rules, host strings, local paths, remote script use, and static rule counts.
 
 Minimum Chrome version is 119. PrivacyBrew uses Manifest V3, dynamic content scripts with `world: "MAIN"`, `matchOriginAsFallback`, `chrome.storage.session`, and Declarative Net Request rule features used by current Chrome stores.
+
+## Firefox
+
+**Install:** Firefox Add-ons link coming soon (FIREFOX_ADDON_URL).
+
+The same `extension/` code runs in Firefox 140 or newer. `tools/package.py --target firefox` makes the Firefox build:
+
+```sh
+python3 tools/package.py --target firefox
+```
+
+The ZIP is `dist/privacybrew-extension-firefox-<version>.zip`. The build changes only these things:
+
+- `manifest.json`: `background.scripts` (Firefox has no extension service workers), `browser_specific_settings.gecko` with the id `privacybrew@privacybrew.app`, `strict_min_version` 140.0 and `data_collection_permissions` `none`, and 64 and 96 pixel icons. Firefox 140 is the first version (and an ESR) with `data_collection_permissions`, which AMO needs for new add-ons. All other APIs need Firefox 128 or older.
+- `rules/*.json`: removes the `webtransport` and `webbundle` resource types. Firefox does not know them.
+
+To try it without a store, open `about:debugging#/runtime/this-firefox`, select **Load Temporary Add-on**, and choose `manifest.json` in `dist/package-work-firefox/`.
+
+Differences that the shared code handles at run time:
+
+| Topic | Chrome | Firefox | How PrivacyBrew handles it |
+| --- | --- | --- | --- |
+| Background | Service worker with `importScripts` | Event page with `background.scripts` | `importScripts` runs only if it exists. |
+| Blocked request error in `webRequest.onErrorOccurred` | `net::ERR_BLOCKED_BY_CLIENT` | `NS_ERROR_ABORT` | Both count as blocked. |
+| DNR resource types | Has `webtransport`, `webbundle` | Does not | Dynamic rules use only types in `declarativeNetRequest.ResourceType`. |
+| `onHeadersReceived` option `extraHeaders` | Needed for `Set-Cookie` | Not known | Added only when the browser has it. |
+| Duplicate content script error | "Duplicate script ID" | "already registered" | Both are ignored. |
+| Host access | Granted at install | Granted at install (Firefox 127+), but the user can remove it | The popup shows "PrivacyBrew needs access to websites to protect you." with an **Allow access** button. |
+| Scroll bars | `::-webkit-scrollbar` | `scrollbar-width`, `scrollbar-color` | A Firefox-only `@supports` rule. |
+| Feedback browser label | From `userAgentData` | From the user agent | Shows "Firefox <version>". |
+
+Firefox tests (headless Firefox, WebDriver BiDi, the packaged Firefox build, local fixtures only):
+
+```sh
+python3 tools/run_tests_firefox.py
+```
+
+The runner uses software rendering and no GPU acceleration, runs one Firefox at a time, and stops Firefox after 10 minutes at most. To watch the tests, add `--headed --slow`. A headed run opens a Firefox window on your screen.
+
+`python3 tools/store_screenshots_firefox.py` makes the AMO screenshots in `store-firefox/screenshots/`. The AMO submit kit is in `store-firefox/`.
 
 ## Popup layout check
 
