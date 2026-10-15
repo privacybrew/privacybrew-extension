@@ -137,7 +137,7 @@ Minimum Chrome version is 119. PrivacyBrew uses Manifest V3, dynamic content scr
 
 **Install:** Firefox Add-ons link coming soon (FIREFOX_ADDON_URL).
 
-The same `extension/` code runs in Firefox 140 or newer. `tools/package.py --target firefox` makes the Firefox build:
+The same `extension/` code runs in Firefox 140 or newer, and in Firefox for Android 142 or newer. `tools/package.py --target firefox` makes the Firefox build:
 
 ```sh
 python3 tools/package.py --target firefox
@@ -145,7 +145,7 @@ python3 tools/package.py --target firefox
 
 The ZIP is `dist/privacybrew-extension-firefox-<version>.zip`. The build changes only these things:
 
-- `manifest.json`: `background.scripts` (Firefox has no extension service workers), `browser_specific_settings.gecko` with the id `privacybrew@privacybrew.app`, `strict_min_version` 140.0 and `data_collection_permissions` `none`, and 64 and 96 pixel icons. Firefox 140 is the first version (and an ESR) with `data_collection_permissions`, which AMO needs for new add-ons. All other APIs need Firefox 128 or older.
+- `manifest.json`: `background.scripts` (Firefox has no extension service workers), `browser_specific_settings.gecko` with the id `privacybrew@privacybrew.app`, `strict_min_version` 140.0, `browser_specific_settings.gecko_android` with `strict_min_version` 142.0, and `data_collection_permissions` `none`, and 64 and 96 pixel icons. Firefox 140 is the first version (and an ESR) with `data_collection_permissions`, which AMO needs for new add-ons. All other APIs need Firefox 128 or older.
 - `rules/*.json`: removes the `webtransport` and `webbundle` resource types. Firefox does not know them.
 
 To try it without a store, open `about:debugging#/runtime/this-firefox`, select **Load Temporary Add-on**, and choose `manifest.json` in `dist/package-work-firefox/`.

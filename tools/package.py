@@ -21,6 +21,8 @@ GECKO_ID = 'privacybrew@privacybrew.app'
 # scripting world MAIN, matchOriginAsFallback and DNR domainType are 128; storage.session
 # is 115; DNR requestDomains/initiatorDomains/modifyHeaders/session rules are 113.
 GECKO_MIN_VERSION = '140.0'
+# Firefox for Android supports data_collection_permissions from 142.
+GECKO_ANDROID_MIN_VERSION = '142.0'
 # Firefox DNR does not know these resource types and rejects rules that use them.
 FIREFOX_UNSUPPORTED_RESOURCE_TYPES = {'webtransport', 'webbundle'}
 FIREFOX_BACKGROUND_SCRIPTS = ['lib/psl.js', 'lib/disconnect.js', 'lib/report.js', 'background.js']
@@ -73,7 +75,8 @@ def firefox_manifest(chrome):
             'id': GECKO_ID,
             'strict_min_version': GECKO_MIN_VERSION,
             'data_collection_permissions': {'required': ['none']}
-        }
+        },
+        'gecko_android': {'strict_min_version': GECKO_ANDROID_MIN_VERSION}
     }
     return m
 
@@ -159,6 +162,8 @@ def validate_firefox(manifest):
         raise SystemExit('Firefox manifest has wrong Gecko id or version')
     if gecko.get('data_collection_permissions') != {'required': ['none']}:
         raise SystemExit('Firefox manifest must declare no data collection')
+    if manifest.get('browser_specific_settings', {}).get('gecko_android', {}).get('strict_min_version') != GECKO_ANDROID_MIN_VERSION:
+        raise SystemExit('Firefox manifest has wrong Android version')
     if manifest.get('host_permissions') != ['*://*/*']:
         raise SystemExit('Firefox manifest host permissions changed')
     chrome = json.loads((SRC / 'manifest.json').read_text())

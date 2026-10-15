@@ -27,7 +27,7 @@
 3. Select **Submit a New Add-on**.
 4. "How to Distribute this Version": select **On this site**. Select **Continue**.
 5. Upload `dist/privacybrew-extension-firefox-1.0.0.zip`.
-6. Compatible platforms: select **Firefox** only. Do not select Firefox for Android yet (see "Firefox for Android" below).
+6. Compatible platforms: select **Firefox** and **Firefox for Android**.
 7. Wait for the automatic validation. Read the warnings. Expected warnings:
    - `new Function` in `background.js` (the allowlisted autoconsent snippets, see `SOURCE.md`).
    - `innerHTML` or similar in `vendor/autoconsent/content.bundle.js` (unmodified third-party code).
@@ -67,11 +67,7 @@ To test: open a news website, then open the PrivacyBrew toolbar button. The repo
 
 ## Firefox for Android
 
-Do not select Firefox for Android until it is tested on a phone. When it is ready:
-
-1. Add `"gecko_android": {"strict_min_version": "142.0"}` to `browser_specific_settings` in `firefox_manifest()` in `tools/package.py`. Firefox for Android supports `data_collection_permissions` from 142.
-2. Test on a phone (popup size, badge, cookie pop-ups, power menu, "Allow access" notice).
-3. Upload a new version and select both platforms.
+The Firefox build also declares `gecko_android` with `strict_min_version` 142.0. Firefox for Android supports `data_collection_permissions` from 142. The build was tested on a Pixel 9a with Firefox 157: popup, blocking, ads, cookie pop-ups, power menu, Settings and Feedback.
 
 ## After approval
 
