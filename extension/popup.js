@@ -291,18 +291,26 @@
     });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closePowerMenu(); });
 
+    // Show the choice at once; refresh() then confirms it from the saved settings.
+    function showChoice(button) {
+      for (const other of document.querySelectorAll('#powerMenu [data-temp], #globalOffButton')) markSelected(other, other === button);
+      $('forAWhileButton').classList.toggle('selected', Boolean(button.dataset.temp));
+    }
     $('sitePowerButton').addEventListener('click', async () => {
+      markSelected($('sitePowerButton'), !currentReport.sitePaused);
       await chrome.runtime.sendMessage({ type: 'setSitePaused', tabId: currentTabId, paused: !currentReport.sitePaused });
       await chrome.runtime.sendMessage({ type: 'reloadTab', tabId: currentTabId });
+      await refresh();
     });
     for (const button of document.querySelectorAll('[data-temp]')) {
       button.addEventListener('click', async () => {
+        showChoice(button);
         if (button.dataset.temp === 'restart') await chrome.runtime.sendMessage({ type: 'setOffUntilRestart', enabled: true });
         else await chrome.runtime.sendMessage({ type: 'setTemporaryOff', minutes: Number(button.dataset.temp) });
         await refresh();
       });
     }
-    $('globalOffButton').addEventListener('click', async () => { await chrome.runtime.sendMessage({ type: 'setGlobalOff', enabled: true }); await refresh(); });
+    $('globalOffButton').addEventListener('click', async () => { showChoice($('globalOffButton')); await chrome.runtime.sendMessage({ type: 'setGlobalOff', enabled: true }); await refresh(); });
     $('statusTurnOn').addEventListener('click', async () => {
       await chrome.runtime.sendMessage({ type: 'setGlobalOff', enabled: false });
       await chrome.runtime.sendMessage({ type: 'setTemporaryOff', minutes: 0 });
