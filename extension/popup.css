@@ -42,6 +42,10 @@ html, body {
 .menu button { display: block; width: 220px; text-align: left; margin: 4px; }
 .submenu { margin-left: 12px; border-left: 1px solid var(--border); padding-left: 4px; }
 .submenu button { width: 204px; }
+.menu button:hover { background: var(--border); border-color: var(--accent); }
+.menu button:active { background: #4a3860; }
+.menu button.selected { background: #3b2756; border-color: var(--accent); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+.menu button.selected:hover { background: #4a3860; }
 .status-bar, .wall-banner { display: flex; gap: 8px; align-items: center; margin: 8px 0; padding: 8px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--border); }
 .wall-banner { border-color: var(--warning); }
 .view { height: 510px; overflow: hidden; }

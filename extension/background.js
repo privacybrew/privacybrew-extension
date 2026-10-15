@@ -106,7 +106,7 @@ function siteDomainFor(url) {
 
 async function getSettings() {
   const [stored, session] = await Promise.all([
-    chrome.storage.local.get({ blockingEnabled: true, adBlockingEnabled: true, cookiePopupEnabled: true, gpcEnabled: true, dntEnabled: false, pausedSites: {}, globalOff: false, tempOffUntil: 0 }),
+    chrome.storage.local.get({ blockingEnabled: true, adBlockingEnabled: true, cookiePopupEnabled: true, gpcEnabled: true, dntEnabled: false, pausedSites: {}, globalOff: false, tempOffUntil: 0, tempOffMinutes: 0 }),
     chrome.storage.session.get({ restartOff: false })
   ]);
   return {
@@ -118,6 +118,7 @@ async function getSettings() {
     pausedSites: stored.pausedSites || {},
     globalOff: stored.globalOff === true,
     tempOffUntil: stored.tempOffUntil || 0,
+    tempOffMinutes: stored.tempOffMinutes || 0,
     restartOff: session.restartOff === true
   };
 }
@@ -466,20 +467,20 @@ async function setPaused(siteDomain, paused) {
 
 async function setTemporaryOff(minutes) {
   const until = minutes ? Date.now() + minutes * 60000 : 0;
-  await chrome.storage.local.set({ tempOffUntil: until, globalOff: false });
+  await chrome.storage.local.set({ tempOffUntil: until, tempOffMinutes: minutes || 0, globalOff: false });
   if (minutes) chrome.alarms.create('privacybrew-temp-off', { delayInMinutes: minutes });
   else chrome.alarms.clear('privacybrew-temp-off');
   return applySettings();
 }
 async function setGlobalOff(enabled) {
-  await chrome.storage.local.set({ globalOff: Boolean(enabled), tempOffUntil: 0 });
+  await chrome.storage.local.set({ globalOff: Boolean(enabled), tempOffUntil: 0, tempOffMinutes: 0 });
   await chrome.storage.session.set({ restartOff: false });
   await chrome.alarms.clear('privacybrew-temp-off');
   return applySettings();
 }
 
 async function setOffUntilRestart(enabled) {
-  await chrome.storage.local.set({ globalOff: false, tempOffUntil: 0 });
+  await chrome.storage.local.set({ globalOff: false, tempOffUntil: 0, tempOffMinutes: 0 });
   await chrome.storage.session.set({ restartOff: Boolean(enabled) });
   await chrome.alarms.clear('privacybrew-temp-off');
   return applySettings();

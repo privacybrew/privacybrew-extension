@@ -64,7 +64,7 @@ PB.Report.addCookie(s, 'static.doubleclick.net');
 if ('{cookie}'==='rejected') PB.Report.setCookiePopup(s, 'rejected', {{cmp:'OneTrust'}});
 {adwall}
 await chrome.storage.session.set({{['tab:{tab_id}']:s}});
-await chrome.storage.local.set({{pausedSites: {paused}, globalOff: {global_off}, tempOffUntil: {temp_until}}});
+await chrome.storage.local.set({{pausedSites: {paused}, globalOff: {global_off}, tempOffUntil: {temp_until}, tempOffMinutes: {15 if state == 'temp' else 0}}});
 
 return s;
 }})()"""
@@ -72,7 +72,7 @@ return s;
     if 'exceptionDetails' in res:
         raise RuntimeError(res['exceptionDetails'])
 
-def open_popup(cdp, ext, sw, name, action=None, state='normal'):
+def open_popup(cdp, ext, sw, name, action=None, state='normal', expect=None):
     target=cdp.call('Target.createTarget', {'url': f'chrome-extension://{ext}/popup.html'})['targetId']; sess=attach(cdp,target); cdp.call('Page.enable', sessionId=sess); cdp.call('Emulation.setDeviceMetricsOverride', {'width':380,'height':580,'deviceScaleFactor':SCALE,'mobile':False}, sess)
     time.sleep(.5)
     tab_id = 424242 + abs(hash(name)) % 10000
@@ -87,6 +87,10 @@ def open_popup(cdp, ext, sw, name, action=None, state='normal'):
     print(name, 'clipped=', clipped, 'footer_visible=', footer_ok)
     FAILURES.extend([f'{name}: {clipped} clipped elements'] if clipped else [])
     FAILURES.extend([f'{name}: footer not fully visible'] if footer_ok is False else [])
+    if expect:
+        got=cdp.call('Runtime.evaluate', {'expression': expect, 'returnByValue':True}, sess)['result'].get('value')
+        print(name, 'expect=', got)
+        FAILURES.extend([] if got is True else [f'{name}: expectation failed ({got})'])
 
 FAILURES=[]
 
@@ -99,6 +103,8 @@ if __name__=='__main__':
         open_popup(cdp,ext,sw,'pb-ext-settings.png', "document.querySelector('#settingsButton').click()")
         open_popup(cdp,ext,sw,'pb-ext-power-menu.png', "document.querySelector('#powerButton').click()")
         open_popup(cdp,ext,sw,'pb-ext-power-menu-while.png', "document.querySelector('#powerButton').click(); document.querySelector('#forAWhileButton').click()")
+        open_popup(cdp,ext,sw,'pb-ext-power-menu-selected.png', "document.querySelector('#powerButton').click()", state='temp',
+                   expect="(()=>{const s=[...document.querySelectorAll('#powerMenu .selected')].map(b=>b.id||b.dataset.temp).join(',');return s==='forAWhileButton,15'&&!document.querySelector('#forAWhileSubmenu').hidden&&document.querySelector('[data-temp=\"15\"]').getAttribute('aria-pressed')==='true'||s})()")
         open_popup(cdp,ext,sw,'pb-ext-feedback.png', "document.querySelector('#feedbackButton').click()")
         open_popup(cdp,ext,sw,'pb-ext-worst-case.png', state='worst')
         open_popup(cdp,ext,sw,'pb-ext-wall.png', state='wall')

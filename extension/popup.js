@@ -53,10 +53,34 @@
     $('powerButton').setAttribute('aria-expanded', 'false');
   }
 
+  function setSubmenuOpen(open) {
+    $('forAWhileSubmenu').hidden = !open;
+    $('forAWhileButton').setAttribute('aria-expanded', open ? 'true' : 'false');
+    text($('forAWhileButton'), open ? 'Turn off for a while ▾' : 'Turn off for a while ▸');
+  }
+
   function togglePowerMenu() {
     const menu = $('powerMenu');
     menu.hidden = !menu.hidden;
     $('powerButton').setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
+    if (!menu.hidden && $('forAWhileButton').classList.contains('selected')) setSubmenuOpen(true);
+  }
+
+  function markSelected(button, selected) {
+    button.classList.toggle('selected', selected);
+    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+  }
+
+  function renderPowerMenu(report) {
+    const settings = report.settings || {};
+    const tempOn = Boolean(settings.tempOffUntil && Date.now() < settings.tempOffUntil);
+    markSelected($('sitePowerButton'), Boolean(report.sitePaused));
+    markSelected($('globalOffButton'), Boolean(settings.globalOff));
+    for (const button of document.querySelectorAll('[data-temp]')) {
+      const value = button.dataset.temp;
+      markSelected(button, value === 'restart' ? Boolean(settings.restartOff) : tempOn && Number(value) === settings.tempOffMinutes);
+    }
+    $('forAWhileButton').classList.toggle('selected', tempOn || Boolean(settings.restartOff));
   }
 
   function protectionOff(report) {
@@ -130,6 +154,7 @@
     text($('privacyRequestsRow'), `${settings.gpcEnabled ? 'GPC sent' : 'GPC off'} · ${settings.dntEnabled ? 'DNT sent' : 'DNT off'}`);
     $('powerButton').classList.toggle('off', off);
     text($('sitePowerButton'), report.sitePaused ? 'Turn on on this website' : 'Turn off on this website');
+    renderPowerMenu(report);
   }
 
   function trackerDetail(report) {
@@ -262,10 +287,7 @@
     $('privacyRequestsRow').addEventListener('click', () => showView('settings'));
     $('powerButton').addEventListener('click', togglePowerMenu);
     $('forAWhileButton').addEventListener('click', () => {
-      const submenu = $('forAWhileSubmenu');
-      submenu.hidden = !submenu.hidden;
-      $('forAWhileButton').setAttribute('aria-expanded', submenu.hidden ? 'false' : 'true');
-      text($('forAWhileButton'), submenu.hidden ? 'Turn off for a while ▸' : 'Turn off for a while ▾');
+      setSubmenuOpen($('forAWhileSubmenu').hidden);
     });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closePowerMenu(); });
 
