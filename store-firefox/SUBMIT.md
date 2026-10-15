@@ -76,4 +76,6 @@ The Firefox build also declares `gecko_android` with `strict_min_version` 142.0.
 
 ## Status
 
-- Not submitted yet.
+- 2026-10-15: Version 1.0.0 submitted to addons.mozilla.org for review (Firefox and Firefox for Android).
+  Source commit c41120d. ZIP SHA-256: f4100b50d24b0e8674c3b9ff460b1de7ac9fab9bb1d4d1e15fa4a36ce36717ff
+  Add-on ID: privacybrew@privacybrew.app. Watch privacybrew@protonmail.com.

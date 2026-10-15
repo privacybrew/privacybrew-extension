@@ -13,7 +13,7 @@ EXCLUDE_DIRS = {'_metadata', '__pycache__'}
 EXCLUDE_SUFFIXES = {'.map', '.pyc'}
 TARGET = 'chrome'
 
-# Icon sizes that only the Firefox manifest uses. The Chrome ZIP keeps its 1.0.0 file set.
+# Icon sizes that only the Firefox manifest uses. The Chrome ZIP keeps its original file set.
 FIREFOX_ONLY_FILES = {'icons/icon-64.png', 'icons/icon-96.png'}
 GECKO_ID = 'privacybrew@privacybrew.app'
 # 140 is the first Firefox (and an ESR) with data_collection_permissions, which AMO
@@ -119,7 +119,7 @@ def manifest_files(manifest):
 def validate():
     manifest = json.loads((WORK / 'manifest.json').read_text())
     assert manifest['manifest_version'] == 3
-    assert manifest['version'] == '1.0.0'
+    assert re.fullmatch(r'\d+\.\d+\.\d+', manifest['version']), manifest['version']
     for f in manifest_files(manifest):
         if not (WORK / f).exists():
             raise SystemExit(f'Manifest references missing file: {f}')

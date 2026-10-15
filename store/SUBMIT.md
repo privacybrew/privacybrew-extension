@@ -32,3 +32,7 @@ TODO: Update the website button from Coming soon to the Chrome Web Store URL.
   Expect an in-depth review (broad host permissions). Watch privacybrew@protonmail.com.
 - 2026-10-14: Approved and published: https://chromewebstore.google.com/detail/privacybrew-tracker-ad-bl/hdhjekomkdacaliekmmdilaanalclhib
   Website buttons and README updated with the store link.
+- 2026-10-15: Version 1.0.1 prepared. Power menu shows the active option, one option at a time,
+  tap the active option to turn on again. Notice when site access is limited. Firefox compatibility
+  in shared code. Same permissions and file list as 1.0.0.
+  ZIP SHA-256: 36003575bbd1cf99cb885bf1844fb651cd3fc4aae425268c4ba752b56c67697d
