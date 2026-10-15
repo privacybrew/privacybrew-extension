@@ -88,6 +88,7 @@ label { display: block; margin: 14px 0; }
 
 .text-value { font-size: 27px; }
 .app:has(#statusBar:not([hidden])) .home-card { min-height: 98px; }
+.app:has(#accessBanner:not([hidden])) .home-card { min-height: 98px; }
 .app:has(#wallBanner:not([hidden])) .home-card { min-height: 98px; }
 .app:has(#statusBar:not([hidden])) .home-card.wide, .app:has(#wallBanner:not([hidden])) .home-card.wide { min-height: 70px; }
 .app:has(#statusBar:not([hidden])) .hero-card, .app:has(#wallBanner:not([hidden])) .hero-card { padding: 10px; margin: 6px 0; }
@@ -141,4 +142,9 @@ label { display: block; margin: 14px 0; }
 }
 .app.compact-home .home-footer {
   bottom: 14px;
+}
+
+/* Firefox does not support ::-webkit-scrollbar. Only Firefox matches this rule, so Chrome keeps its scroll bars. */
+@supports (-moz-appearance: none) {
+  .detail-scroll, #settingsView { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 }

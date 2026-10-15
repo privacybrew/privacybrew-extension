@@ -7,6 +7,8 @@
   let currentTabId = null;
   let currentReport = null;
   let currentView = 'home';
+  let hasHostAccess = true;
+  const ALL_SITES = { origins: ['*://*/*'] };
 
   function text(el, value) {
     el.textContent = value;
@@ -96,10 +98,13 @@
     text($('overall'), report.label || 'No report yet');
     setOverallClass(report.label || '');
 
-    $('statusBar').hidden = !status;
+    // Without host access PrivacyBrew cannot see or block anything, so this notice replaces the other banners.
+    const needsAccess = !hasHostAccess;
+    $('accessBanner').hidden = !needsAccess;
+    $('statusBar').hidden = !status || needsAccess;
     text($('statusText'), status);
 
-    const showWall = !status && (report.adWall === 'detected' || report.adWall === 'hidden');
+    const showWall = !status && !needsAccess && (report.adWall === 'detected' || report.adWall === 'hidden');
     if (showWall && report.adWall === 'detected') {
       $('wallBanner').hidden = false;
       text($('wallText'), 'This website asks you to turn off ad blocking.');
@@ -109,7 +114,7 @@
     } else {
       $('wallBanner').hidden = true;
     }
-    document.querySelector('.app').classList.toggle('compact-home', Boolean(status || showWall));
+    document.querySelector('.app').classList.toggle('compact-home', Boolean(status || showWall || needsAccess));
 
     text($('homeTrackersNumber'), String(trackerCount));
     text($('homeTrackersSub'), `${blocked} blocked · ${allowed} allowed · from ${report.trackerCount || 0} ${plural(report.trackerCount || 0, 'company', 'companies')}`);
@@ -221,6 +226,8 @@
     const brands = navigator.userAgentData && navigator.userAgentData.brands;
     const brand = brands && brands.find((item) => /Chrome/i.test(item.brand));
     if (brand) return `${brand.brand.replace('Google ', '')} ${brand.version}`;
+    const firefox = navigator.userAgent.match(/Firefox\/(\d+)/);
+    if (firefox) return `Firefox ${firefox[1]}`;
     const match = navigator.userAgent.match(/Chrome\/(\d+)/);
     return match ? `Chrome ${match[1]}` : 'Browser';
   }
@@ -229,7 +236,17 @@
     // Feedback never includes the page address. The user can type it in the form if they want.
   }
 
+  // Firefox users can take away access to websites after install. Chrome users can limit it too.
+  async function checkHostAccess() {
+    try {
+      return await chrome.permissions.contains(ALL_SITES);
+    } catch (error) {
+      return true;
+    }
+  }
+
   async function refresh() {
+    hasHostAccess = await checkHostAccess();
     const response = await chrome.runtime.sendMessage({ type: 'getReport', tabId: currentTabId });
     currentReport = response && response.report ? response.report : { status: 'needReload' };
     renderHome(currentReport);
@@ -270,6 +287,11 @@
       await chrome.runtime.sendMessage({ type: 'setOffUntilRestart', enabled: false });
       if (currentReport.sitePaused) await chrome.runtime.sendMessage({ type: 'setSitePaused', tabId: currentTabId, paused: false });
       await refresh();
+    });
+    $('accessAllow').addEventListener('click', async () => {
+      // Call request first, while the click still counts as a user action.
+      const granted = await chrome.permissions.request(ALL_SITES).catch(() => false);
+      if (granted) await refresh();
     });
     $('wallPause').addEventListener('click', async () => {
       await chrome.runtime.sendMessage({ type: 'setSitePaused', tabId: currentTabId, paused: true });

@@ -1,4 +1,6 @@
-importScripts('lib/psl.js', 'lib/disconnect.js', 'lib/report.js');
+// Chrome service worker loads the libraries here. Firefox lists them in
+// background.scripts, and a background page has no importScripts.
+if (typeof importScripts === 'function') importScripts('lib/psl.js', 'lib/disconnect.js', 'lib/report.js');
 
 const STORE_PREFIX = 'tab:';
 const DEBUG_REPORT_MESSAGES = true;
@@ -17,12 +19,27 @@ let autoconsentEvalSnippets = null;
 const PAUSE_RULE_BASE = 100000;
 const SAME_COMPANY_SESSION_BASE = 2000000;
 const SAME_COMPANY_RULES_PER_TAB = 1000;
-const RESOURCE_TYPES_WITHOUT_MAIN = ['sub_frame', 'stylesheet', 'script', 'image', 'font', 'object', 'xmlhttprequest', 'ping', 'csp_report', 'media', 'websocket', 'webtransport', 'webbundle', 'other'];
+const RESOURCE_TYPES_WITHOUT_MAIN = supportedResourceTypes(['sub_frame', 'stylesheet', 'script', 'image', 'font', 'object', 'xmlhttprequest', 'ping', 'csp_report', 'media', 'websocket', 'webtransport', 'webbundle', 'other']);
 const BLOCKED_CATEGORIES = new Set(['Advertising', 'Analytics', 'Social', 'Fingerprinting', 'Cryptomining']);
 let dataReady = null;
 let psl = null;
 let disconnect = null;
 const memory = new Map();
+
+// Firefox has no 'webtransport' or 'webbundle' DNR resource types and rejects
+// rules that use them. Chrome supports all types in the list.
+function supportedResourceTypes(types) {
+  const known = chrome.declarativeNetRequest && chrome.declarativeNetRequest.ResourceType;
+  if (!known) return types;
+  const values = new Set(Object.values(known));
+  return types.filter((type) => values.has(type));
+}
+
+// Chrome needs 'extraHeaders' to see Set-Cookie. Firefox rejects unknown values.
+function headersReceivedOptions() {
+  const options = chrome.webRequest.OnHeadersReceivedOptions;
+  return options && options.EXTRA_HEADERS ? ['responseHeaders', options.EXTRA_HEADERS] : ['responseHeaders'];
+}
 const timers = new Map();
 const cookiePopupTimers = new Map();
 
@@ -163,7 +180,8 @@ async function applyMainWorldScript(scriptId, scriptFile, enabled) {
         world: 'MAIN'
       }]);
     } catch (error) {
-      if (!String(error && error.message).includes('Duplicate script ID')) throw error;
+      // Chrome: "Duplicate script ID". Firefox: "... is already registered".
+      if (!/Duplicate script ID|already registered/.test(String(error && error.message))) throw error;
     }
   } else if (!enabled && isRegistered) {
     await chrome.scripting.unregisterContentScripts({ ids: [scriptId] });
@@ -381,8 +399,13 @@ async function observeAdBlocked(tabId, url) {
   scheduleSave(tabId, state);
 }
 
+// Chrome reports a request that an extension blocked as net::ERR_BLOCKED_BY_CLIENT.
+// Firefox cancels a request that a DNR rule blocks with NS_ERROR_ABORT. Other
+// cancels in Firefox use different codes, for example NS_BINDING_ABORTED.
+const BLOCKED_BY_EXTENSION_ERRORS = new Set(['net::ERR_BLOCKED_BY_CLIENT', 'NS_ERROR_ABORT']);
+
 async function observeBlocked(details) {
-  if (details.error === 'net::ERR_BLOCKED_BY_CLIENT') {
+  if (BLOCKED_BY_EXTENSION_ERRORS.has(details.error)) {
     await observeTrackerUrl(details.tabId, details.url, 'blocked');
     await observeAdBlocked(details.tabId, details.url);
   }
@@ -505,7 +528,7 @@ chrome.webRequest.onErrorOccurred.addListener((details) => {
 
 chrome.webRequest.onHeadersReceived.addListener((details) => {
   observeHeaders(details).catch(console.error);
-}, { urls: ['*://*/*'] }, ['responseHeaders', 'extraHeaders']);
+}, { urls: ['*://*/*'] }, headersReceivedOptions());
 
 
 function autoconsentConfig(enabled) {
@@ -582,7 +605,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const paused = Boolean(state && isProtectionOff(settings, state.siteDomain));
       const enabled = settings.cookiePopupEnabled && !paused;
       const rules = enabled ? await ensureAutoconsentRules() : { v: 1, s: [], c: [] };
-      chrome.tabs.sendMessage(sender.tab.id, { type: 'initResp', rules: { autoconsent: [], compact: rules }, config: autoconsentConfig(enabled) }, { frameId: sender.frameId || 0 });
+      chrome.tabs.sendMessage(sender.tab.id, { type: 'initResp', rules: { autoconsent: [], compact: rules }, config: autoconsentConfig(enabled) }, { frameId: sender.frameId || 0 })
+        // The frame can be gone before the answer arrives (Firefox reports this as an error).
+        .catch(() => {});
       sendResponse({ ok: true });
       return;
     }
