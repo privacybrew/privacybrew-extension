@@ -103,6 +103,8 @@ if __name__=='__main__':
         open_popup(cdp,ext,sw,'pb-ext-worst-case.png', state='worst')
         open_popup(cdp,ext,sw,'pb-ext-wall.png', state='wall')
         open_popup(cdp,ext,sw,'pb-ext-global-off.png', state='global')
+        # Host access notice (Firefox users can remove access; Chrome users can limit it). Shown with the worst-case state.
+        open_popup(cdp,ext,sw,'pb-ext-no-access.png', "document.querySelector('#accessBanner').hidden=false; document.querySelector('#statusBar').hidden=true; document.querySelector('#wallBanner').hidden=true; document.querySelector('.app').classList.add('compact-home')", state='worst')
         if FAILURES:
             raise SystemExit('Popup layout check failed:\n' + '\n'.join(FAILURES))
         print('Popup layout check passed')
