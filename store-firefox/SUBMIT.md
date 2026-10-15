@@ -18,7 +18,7 @@
    git archive --format=zip -o dist/privacybrew-extension-source-1.0.0.zip HEAD
    ```
 
-4. In `store-firefox/SOURCE.md`, replace `COMMIT_PLACEHOLDER` with the commit (`git rev-parse HEAD`) if it is not filled in yet.
+4. Check that the commit in `store-firefox/SOURCE.md` builds the same files as the ZIP you upload. If the extension code changed after it, update the commit.
 
 ## Submit
 

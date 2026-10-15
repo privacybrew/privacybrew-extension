@@ -3,7 +3,7 @@
 PrivacyBrew is open source (GPLv3).
 
 - Repository: https://github.com/privacybrew/privacybrew-extension
-- Commit: COMMIT_PLACEHOLDER
+- Commit: 9eeb73fefc1eece2f24d4de4952e5f83c13769ea
 - Uploaded file: `privacybrew-extension-firefox-1.0.0.zip`
 
 ## What is in the ZIP
@@ -23,7 +23,7 @@ You need only Python 3.10 or newer. The build uses the Python standard library. 
 ```sh
 git clone https://github.com/privacybrew/privacybrew-extension.git
 cd privacybrew-extension
-git checkout COMMIT_PLACEHOLDER
+git checkout 9eeb73fefc1eece2f24d4de4952e5f83c13769ea
 python3 tools/package.py --target firefox
 ```
 
