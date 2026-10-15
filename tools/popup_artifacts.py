@@ -79,7 +79,7 @@ def open_popup(cdp, ext, sw, name, action=None, state='normal', expect=None):
     create_state(cdp, sw, tab_id, state=state)
     cdp.call('Page.navigate', {'url': f'chrome-extension://{ext}/popup.html?tabId={tab_id}'}, sess); time.sleep(.8)
     if action:
-        cdp.call('Runtime.evaluate', {'expression': action}, sess); time.sleep(.5)
+        cdp.call('Runtime.evaluate', {'expression': action}, sess); time.sleep(1.5 if expect else .5)
     data=cdp.call('Page.captureScreenshot', {'format':'png'}, sess)['data']
     (ART/name).write_bytes(base64.b64decode(data))
     clipped=cdp.call('Runtime.evaluate', {'expression': "[...document.querySelectorAll('body *:not(script):not(style)')].filter(e=>{const r=e.getBoundingClientRect();return r.bottom>581&&!e.closest('.detail-scroll')&&!e.closest('#settingsView')&&e.id!=='homeView'}).length", 'returnByValue':True}, sess)['result'].get('value')
@@ -105,6 +105,13 @@ if __name__=='__main__':
         open_popup(cdp,ext,sw,'pb-ext-power-menu-while.png', "document.querySelector('#powerButton').click(); document.querySelector('#forAWhileButton').click()")
         open_popup(cdp,ext,sw,'pb-ext-power-menu-selected.png', "document.querySelector('#powerButton').click()", state='temp',
                    expect="(()=>{const s=[...document.querySelectorAll('#powerMenu .selected')].map(b=>b.id||b.dataset.temp).join(',');return s==='forAWhileButton,15'&&!document.querySelector('#forAWhileSubmenu').hidden&&document.querySelector('[data-temp=\"15\"]').getAttribute('aria-pressed')==='true'||s})()")
+        sel = "[...document.querySelectorAll('#powerMenu .selected')].map(b=>b.id||b.dataset.temp).join(',')"
+        # One option at a time: choosing 15 minutes on a paused website clears the website pause.
+        open_popup(cdp,ext,sw,'pb-ext-power-menu-switch.png', "document.querySelector('#powerButton').click(); document.querySelector('#forAWhileButton').click(); document.querySelector('[data-temp=\"15\"]').click()", state='paused',
+                   expect=f"(()=>{{const s={sel};return s==='forAWhileButton,15'||s}})()")
+        # Tapping the active option turns PrivacyBrew on again.
+        open_popup(cdp,ext,sw,'pb-ext-power-menu-unselect.png', "document.querySelector('#powerButton').click(); document.querySelector('[data-temp=\"15\"]').click()", state='temp',
+                   expect=f"(()=>{{const s={sel};return s===''&&document.querySelector('#statusBar').hidden||s||'status bar still shown'}})()")
         open_popup(cdp,ext,sw,'pb-ext-feedback.png', "document.querySelector('#feedbackButton').click()")
         open_popup(cdp,ext,sw,'pb-ext-worst-case.png', state='worst')
         open_popup(cdp,ext,sw,'pb-ext-wall.png', state='wall')

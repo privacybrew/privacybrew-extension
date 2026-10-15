@@ -153,7 +153,6 @@
     text($('homeFingerprintWord'), fingerprintCount ? plural(fingerprintCount, 'method') : '');
     text($('privacyRequestsRow'), `${settings.gpcEnabled ? 'GPC sent' : 'GPC off'} · ${settings.dntEnabled ? 'DNT sent' : 'DNT off'}`);
     $('powerButton').classList.toggle('off', off);
-    text($('sitePowerButton'), report.sitePaused ? 'Turn on on this website' : 'Turn off on this website');
     renderPowerMenu(report);
   }
 
@@ -291,31 +290,42 @@
     });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closePowerMenu(); });
 
-    // Show the choice at once; refresh() then confirms it from the saved settings.
+    // Only one way to turn off can be active. Tapping the active option turns PrivacyBrew on again.
+    const offOptions = () => [$('sitePowerButton'), ...document.querySelectorAll('#powerMenu [data-temp]'), $('globalOffButton')];
     function showChoice(button) {
-      for (const other of document.querySelectorAll('#powerMenu [data-temp], #globalOffButton')) markSelected(other, other === button);
-      $('forAWhileButton').classList.toggle('selected', Boolean(button.dataset.temp));
+      for (const other of offOptions()) markSelected(other, other === button);
+      $('forAWhileButton').classList.toggle('selected', Boolean(button && button.dataset.temp));
     }
-    $('sitePowerButton').addEventListener('click', async () => {
-      markSelected($('sitePowerButton'), !currentReport.sitePaused);
-      await chrome.runtime.sendMessage({ type: 'setSitePaused', tabId: currentTabId, paused: !currentReport.sitePaused });
-      await chrome.runtime.sendMessage({ type: 'reloadTab', tabId: currentTabId });
-      await refresh();
-    });
-    for (const button of document.querySelectorAll('[data-temp]')) {
-      button.addEventListener('click', async () => {
-        showChoice(button);
-        if (button.dataset.temp === 'restart') await chrome.runtime.sendMessage({ type: 'setOffUntilRestart', enabled: true });
-        else await chrome.runtime.sendMessage({ type: 'setTemporaryOff', minutes: Number(button.dataset.temp) });
-        await refresh();
-      });
-    }
-    $('globalOffButton').addEventListener('click', async () => { showChoice($('globalOffButton')); await chrome.runtime.sendMessage({ type: 'setGlobalOff', enabled: true }); await refresh(); });
-    $('statusTurnOn').addEventListener('click', async () => {
+    async function turnOnEverywhere() {
+      const wasSitePaused = Boolean(currentReport.sitePaused);
       await chrome.runtime.sendMessage({ type: 'setGlobalOff', enabled: false });
       await chrome.runtime.sendMessage({ type: 'setTemporaryOff', minutes: 0 });
       await chrome.runtime.sendMessage({ type: 'setOffUntilRestart', enabled: false });
-      if (currentReport.sitePaused) await chrome.runtime.sendMessage({ type: 'setSitePaused', tabId: currentTabId, paused: false });
+      if (wasSitePaused) {
+        await chrome.runtime.sendMessage({ type: 'setSitePaused', tabId: currentTabId, paused: false });
+        await chrome.runtime.sendMessage({ type: 'reloadTab', tabId: currentTabId });
+      }
+    }
+    async function chooseOff(button, turnOff) {
+      const active = button.classList.contains('selected');
+      showChoice(active ? null : button);
+      await turnOnEverywhere();
+      if (!active) await turnOff();
+      await refresh();
+    }
+    $('sitePowerButton').addEventListener('click', () => chooseOff($('sitePowerButton'), async () => {
+      await chrome.runtime.sendMessage({ type: 'setSitePaused', tabId: currentTabId, paused: true });
+      await chrome.runtime.sendMessage({ type: 'reloadTab', tabId: currentTabId });
+    }));
+    for (const button of document.querySelectorAll('[data-temp]')) {
+      button.addEventListener('click', () => chooseOff(button, () => button.dataset.temp === 'restart'
+        ? chrome.runtime.sendMessage({ type: 'setOffUntilRestart', enabled: true })
+        : chrome.runtime.sendMessage({ type: 'setTemporaryOff', minutes: Number(button.dataset.temp) })));
+    }
+    $('globalOffButton').addEventListener('click', () => chooseOff($('globalOffButton'), () => chrome.runtime.sendMessage({ type: 'setGlobalOff', enabled: true })));
+    $('statusTurnOn').addEventListener('click', async () => {
+      showChoice(null);
+      await turnOnEverywhere();
       await refresh();
     });
     $('accessAllow').addEventListener('click', async () => {
