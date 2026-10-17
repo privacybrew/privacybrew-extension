@@ -125,10 +125,17 @@
     // Without host access PrivacyBrew cannot see or block anything, so this notice replaces the other banners.
     const needsAccess = !hasHostAccess;
     $('accessBanner').hidden = !needsAccess;
+    // The report started after the page loaded (for example, the tab was open before install).
+    const needsReload = !needsAccess && !status && (report.status === 'needReload' || (report.partial && report.status === 'ok'));
+    $('reloadBanner').hidden = !needsReload;
+    if (report.status === 'needReload') {
+      text($('overall'), 'No report yet');
+      setOverallClass('');
+    }
     $('statusBar').hidden = !status || needsAccess;
     text($('statusText'), status);
 
-    const showWall = !status && !needsAccess && (report.adWall === 'detected' || report.adWall === 'hidden');
+    const showWall = !status && !needsAccess && !needsReload && (report.adWall === 'detected' || report.adWall === 'hidden');
     if (showWall && report.adWall === 'detected') {
       $('wallBanner').hidden = false;
       text($('wallText'), 'This website asks you to turn off ad blocking.');
@@ -138,7 +145,7 @@
     } else {
       $('wallBanner').hidden = true;
     }
-    document.querySelector('.app').classList.toggle('compact-home', Boolean(status || showWall || needsAccess));
+    document.querySelector('.app').classList.toggle('compact-home', Boolean(status || showWall || needsAccess || needsReload));
 
     text($('homeTrackersNumber'), String(trackerCount));
     text($('homeTrackersSub'), `${blocked} blocked · ${allowed} allowed · from ${report.trackerCount || 0} ${plural(report.trackerCount || 0, 'company', 'companies')}`);
@@ -327,6 +334,10 @@
       showChoice(null);
       await turnOnEverywhere();
       await refresh();
+    });
+    $('reloadPage').addEventListener('click', async () => {
+      await chrome.runtime.sendMessage({ type: 'reloadTab', tabId: currentTabId });
+      window.close();
     });
     $('accessAllow').addEventListener('click', async () => {
       // Call request first, while the click still counts as a user action.

@@ -118,6 +118,8 @@ if __name__=='__main__':
         open_popup(cdp,ext,sw,'pb-ext-global-off.png', state='global')
         # Host access notice (Firefox users can remove access; Chrome users can limit it). Shown with the worst-case state.
         open_popup(cdp,ext,sw,'pb-ext-no-access.png', "document.querySelector('#accessBanner').hidden=false; document.querySelector('#statusBar').hidden=true; document.querySelector('#wallBanner').hidden=true; document.querySelector('.app').classList.add('compact-home')", state='worst')
+        # Reload notice: the tab was open before install, so the report is incomplete.
+        open_popup(cdp,ext,sw,'pb-ext-reload.png', "document.querySelector('#reloadBanner').hidden=false; document.querySelector('.app').classList.add('compact-home')")
         if FAILURES:
             raise SystemExit('Popup layout check failed:\n' + '\n'.join(FAILURES))
         print('Popup layout check passed')

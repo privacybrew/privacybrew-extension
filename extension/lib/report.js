@@ -258,6 +258,7 @@
     })).sort((a, b) => a.label.localeCompare(b.label));
     return {
       status: state.status || 'ok',
+      partial: Boolean(state.partial),
       url: state.url || '',
       siteDomain: state.siteDomain || '',
       label: overallLabel(trackers.length, fingerprints.length > 0),

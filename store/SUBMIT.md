@@ -36,3 +36,28 @@ TODO: Update the website button from Coming soon to the Chrome Web Store URL.
   tap the active option to turn on again. Notice when site access is limited. Firefox compatibility
   in shared code. Same permissions and file list as 1.0.0.
   ZIP SHA-256: 36003575bbd1cf99cb885bf1844fb651cd3fc4aae425268c4ba752b56c67697d
+- 2026-10-17: Version 1.0.1 rejected ("Red Potassium": trackers, cookie pop-ups and report card not
+  reproducible). Causes found in a reviewer simulation with the packaged ZIP (also in 1.0.0):
+  - A tab that was open before install showed an empty report or the name of an ad domain
+    (a message from an ad frame created the report).
+  - After moving to a new website, a late event from the old page could bring back the old report.
+  - Many websites show no cookie pop-up to visitors in the US.
+- 2026-10-17: Version 1.0.2 prepared with fixes: the report always uses the website of the tab, a late
+  save from the old page is ignored, and the popup shows "Reload this page to see its full report."
+  with a Reload page button when the report started late. Same permissions and file list as 1.0.0.
+  ZIP SHA-256: e473aac048e7b488a687c4e84754786cdbc02f0469e09516b407ea37c7d397cb
+
+## Test instructions for reviewers (paste)
+
+```
+1. Install PrivacyBrew, then open a NEW tab (or reload open tabs). Pages that were open before
+   install show "Reload this page to see its full report." with a Reload page button.
+2. Report card and trackers: open https://www.dailymail.co.uk or https://www.forbes.com, wait for the
+   page to load, then select the PrivacyBrew icon. The report shows trackers found and blocked, ads
+   blocked, outside scripts and cookies. The icon badge shows the number of blocked companies.
+3. Cookie pop-ups: many websites show no cookie pop-up to visitors in the US. Use a new private window
+   (Allow in Incognito) or clear cookies, then open https://stackoverflow.com (Cookies: Rejected) or
+   https://www.theguardian.com (Cookies: Hidden). PrivacyBrew never selects "Accept all".
+No account or login is needed.
+```
+

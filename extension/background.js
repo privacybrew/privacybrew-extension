@@ -261,12 +261,17 @@ async function applySameCompanySessionRules(tabId, siteDomain) {
 async function getState(tabId) {
   if (memory.has(tabId)) return memory.get(tabId);
   const obj = await chrome.storage.session.get(key(tabId));
+  // Another event can load the same report while this one waits. Keep one copy.
+  if (memory.has(tabId)) return memory.get(tabId);
   const state = obj[key(tabId)] || null;
   if (state) memory.set(tabId, state);
   return state;
 }
 
 function scheduleSave(tabId, state) {
+  // A late event from the previous page can still hold its old report. Do not
+  // let it replace the report of the page that is open now.
+  if (memory.has(tabId) && memory.get(tabId) !== state) return;
   memory.set(tabId, state);
   clearTimeout(timers.get(tabId));
   timers.set(tabId, setTimeout(async () => {
@@ -295,9 +300,20 @@ async function resetTab(tabId, url) {
   const siteDomain = siteDomainFor(url);
   const state = PB.Report.emptyState(tabId, url || '', siteDomain);
   state.status = siteDomain ? 'ok' : 'unsupported';
+  // Use the new report at once, so requests of the new page go into it.
+  memory.set(tabId, state);
+  clearTimeout(timers.get(tabId));
+  timers.delete(tabId);
   await applySameCompanySessionRules(tabId, siteDomain);
   await saveNow(tabId, state);
   await updateBadge(tabId, state);
+}
+
+// The website of the tab, not of the frame that sent the message. Content
+// scripts also run in ad frames, and their address is not the website.
+function pageUrlFor(sender) {
+  if (sender.frameId === 0 && sender.url) return sender.url;
+  return (sender.tab && sender.tab.url) || null;
 }
 
 async function ensureTabState(tabId, fallbackUrl) {
@@ -307,6 +323,8 @@ async function ensureTabState(tabId, fallbackUrl) {
     const siteDomain = siteDomainFor(fallbackUrl);
     state = PB.Report.emptyState(tabId, fallbackUrl, siteDomain);
     state.status = siteDomain ? 'ok' : 'needReload';
+    // The page loaded before PrivacyBrew saw it, so earlier requests are missing.
+    state.partial = true;
     await saveNow(tabId, state);
   }
   return state;
@@ -589,7 +607,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     await ensureData();
     if (message && message.type === 'getCookiePopupEnabled' && sender.tab && sender.tab.id >= 0) {
-      const state = await ensureTabState(sender.tab.id, sender.url || null);
+      const state = await ensureTabState(sender.tab.id, pageUrlFor(sender));
       const settings = await getSettings();
       const paused = Boolean(state && isProtectionOff(settings, state.siteDomain));
       sendResponse({ ok: true, enabled: settings.cookiePopupEnabled && !paused });
@@ -601,7 +619,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
     if (message && message.type === 'init' && sender.tab && sender.tab.id >= 0) {
-      const state = await ensureTabState(sender.tab.id, sender.url || null);
+      const state = await ensureTabState(sender.tab.id, pageUrlFor(sender));
       const settings = await getSettings();
       const paused = Boolean(state && isProtectionOff(settings, state.siteDomain));
       const enabled = settings.cookiePopupEnabled && !paused;
@@ -649,13 +667,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
     if (message && message.type === 'adWall' && sender.tab && sender.tab.id >= 0) {
-      const state = await ensureTabState(sender.tab.id, sender.url || null);
+      const state = await ensureTabState(sender.tab.id, pageUrlFor(sender));
       if (state) { PB.Report.setAdWall(state, message.status || 'detected'); scheduleSave(sender.tab.id, state); }
       sendResponse({ ok: true });
       return;
     }
     if (message && message.type === 'getAdCss' && sender.tab && sender.tab.id >= 0) {
-      const state = await ensureTabState(sender.tab.id, sender.url || null);
+      const state = await ensureTabState(sender.tab.id, pageUrlFor(sender));
       const settings = await getSettings();
       const paused = Boolean(state && isProtectionOff(settings, state.siteDomain));
       if (!settings.blockingEnabled || !settings.adBlockingEnabled || paused) { sendResponse({ ok: true, css: '' }); return; }
@@ -679,7 +697,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
     if (message && message.type === 'adCosmeticApplied' && sender.tab && sender.tab.id >= 0) {
-      const state = await ensureTabState(sender.tab.id, sender.url || null);
+      const state = await ensureTabState(sender.tab.id, pageUrlFor(sender));
       if (state) { PB.Report.addCosmeticTime(state, message.durationMs); scheduleSave(sender.tab.id, state); }
       sendResponse({ ok: true });
       return;
@@ -690,7 +708,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
     if (message && message.type === 'fingerprint' && sender.tab && sender.tab.id >= 0) {
-      const state = await ensureTabState(sender.tab.id, sender.url || null);
+      const state = await ensureTabState(sender.tab.id, pageUrlFor(sender));
       if (state && state.status === 'ok') {
         PB.Report.addFingerprint(state, message.technique, message.origin || 'Script not known');
         scheduleSave(sender.tab.id, state);
@@ -702,7 +720,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message && message.type === 'getReport') {
       const state = await ensureTabState(message.tabId, null);
       const settings = await getSettings();
-      const summary = applySettingsToSummary(state ? PB.Report.summarize(state) : { status: 'needReload' }, settings);
+      let summary = state ? PB.Report.summarize(state) : null;
+      if (!summary) {
+        const tab = await chrome.tabs.get(message.tabId).catch(() => null);
+        const siteDomain = tab && tab.url ? siteDomainFor(tab.url) : '';
+        summary = PB.Report.summarize(PB.Report.emptyState(message.tabId, '', siteDomain));
+        summary.status = siteDomain ? 'needReload' : 'unsupported';
+      }
+      summary = applySettingsToSummary(summary, settings);
       summary.settings = settings;
       summary.sitePaused = Boolean(summary.siteDomain && settings.pausedSites[summary.siteDomain]);
       sendResponse({ ok: true, report: summary });

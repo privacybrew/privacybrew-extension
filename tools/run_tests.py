@@ -371,6 +371,18 @@ def run_e2e(cdp):
     checks.append(('no GPC script when off', len(eval_value(cdp, sw_session, "chrome.scripting.getRegisteredContentScripts({ids:['privacybrew-gpc-main']})")) == 0))
     cdp.call('Runtime.evaluate', {'expression': "setGpc(true)", 'awaitPromise': True}, sw_session)
     checks.append(('one GPC script when on again', len(eval_value(cdp, sw_session, "chrome.scripting.getRegisteredContentScripts({ids:['privacybrew-gpc-main']})")) == 1))
+    stale = eval_value(cdp, sw_session, """(async()=>{ await ensureData(); const t=987650;
+      const oldState=PB.Report.emptyState(t,'https://old.example/','old.example'); await saveNow(t, oldState);
+      const newState=PB.Report.emptyState(t,'https://new.example/','new.example'); await saveNow(t, newState);
+      scheduleSave(t, oldState); await new Promise(r=>setTimeout(r, WRITE_DELAY_MS + 300));
+      const stored=(await chrome.storage.session.get('tab:'+t))['tab:'+t];
+      const result=(await getState(t)).siteDomain + '|' + stored.siteDomain;
+      memory.delete(t); await chrome.storage.session.remove('tab:'+t); return result; })()""")
+    checks.append(('late save of old page keeps the new report', stale == 'new.example|new.example'))
+    checks.append(('ad frame message uses the page address', eval_value(cdp, sw_session, "pageUrlFor({frameId: 3, url: 'https://ads.example/frame', tab: {url: 'https://news.example/story'}})") == 'https://news.example/story'))
+    checks.append(('top frame message uses its own address', eval_value(cdp, sw_session, "pageUrlFor({frameId: 0, url: 'https://news.example/a', tab: {url: 'https://news.example/b'}})") == 'https://news.example/a'))
+    partial = eval_value(cdp, sw_session, """(async()=>{ const t=987651; const s=await ensureTabState(t,'https://late.example/'); const r=PB.Report.summarize(s); memory.delete(t); await chrome.storage.session.remove('tab:'+t); return r.partial === true && r.siteDomain === 'late.example'; })()""")
+    checks.append(('report that starts late is marked incomplete', partial is True))
     cdp.call('Runtime.evaluate', {'expression': "setDnt(false)", 'awaitPromise': True}, sw_session)
     before = len(HEADER_LOG)
     dnt_off_target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
