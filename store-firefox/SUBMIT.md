@@ -11,11 +11,11 @@
    python3 tools/package.py --target firefox
    ```
 
-   Upload `dist/privacybrew-extension-firefox-1.0.0.zip`. Write down its SHA-256 (the package step prints it).
+   Upload `dist/privacybrew-extension-firefox-<version>.zip`. Write down its SHA-256 (the package step prints it).
 3. Make the source archive for reviewers:
 
    ```sh
-   git archive --format=zip -o dist/privacybrew-extension-source-1.0.0.zip HEAD
+   git archive --format=zip -o dist/privacybrew-extension-source-<version>.zip HEAD
    ```
 
 4. Check that the commit in `store-firefox/SOURCE.md` builds the same files as the ZIP you upload. If the extension code changed after it, update the commit.
@@ -26,13 +26,13 @@
 2. Read and accept the Firefox Add-on Distribution Agreement and the Add-on Policies (first time only).
 3. Select **Submit a New Add-on**.
 4. "How to Distribute this Version": select **On this site**. Select **Continue**.
-5. Upload `dist/privacybrew-extension-firefox-1.0.0.zip`.
+5. Upload `dist/privacybrew-extension-firefox-<version>.zip`.
 6. Compatible platforms: select **Firefox** and **Firefox for Android**.
 7. Wait for the automatic validation. Read the warnings. Expected warnings:
    - `new Function` in `background.js` (the allowlisted autoconsent snippets, see `SOURCE.md`).
    - `innerHTML` or similar in `vendor/autoconsent/content.bundle.js` (unmodified third-party code).
    There must be no errors. Select **Continue**.
-8. "Do you need to submit source code?": select **Yes**. Upload `dist/privacybrew-extension-source-1.0.0.zip`. Reason: `vendor/autoconsent/content.bundle.js` is a bundled file from npm, and the rules are generated. `SOURCE.md` in the archive explains all of it.
+8. "Do you need to submit source code?": select **Yes**. Upload `dist/privacybrew-extension-source-<version>.zip`. Reason: `vendor/autoconsent/content.bundle.js` is a bundled file from npm, and the rules are generated. `SOURCE.md` in the archive explains all of it.
 9. Describe the add-on. Copy the fields from `store-firefox/LISTING.md`:
    - Name, add-on URL (slug), summary, description.
    - Categories: Privacy & Security.
@@ -79,3 +79,7 @@ The Firefox build also declares `gecko_android` with `strict_min_version` 142.0.
 - 2026-10-15: Version 1.0.0 submitted to addons.mozilla.org for review (Firefox and Firefox for Android).
   Source commit c41120d. ZIP SHA-256: f4100b50d24b0e8674c3b9ff460b1de7ac9fab9bb1d4d1e15fa4a36ce36717ff
   Add-on ID: privacybrew@privacybrew.app. Watch privacybrew@protonmail.com.
+- 2026-10-17: Version 1.0.2 prepared while 1.0.0 waits for review. Same fixes as Chrome 1.0.2
+  (correct site in reports, no stale report after navigation, reload notice). Source commit 7210a68.
+  ZIP SHA-256: 612836eb3eb9aff196f8936a4b172cff8c4d941b1fb90358983614bb4498048a
+
