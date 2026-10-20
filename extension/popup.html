@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <main class="app" aria-live="polite">
+  <main class="app intro" aria-live="polite">
     <header class="topbar">
       <button id="backButton" class="icon-button" type="button" aria-label="Back" title="Back" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.8l5.6-5.6L12 4 4 12l8 8 1.4-1.4L7.8 13H20v-2Z"/></svg></button>
       <img src="icons/icon-32.png" width="28" height="28" alt="">
@@ -33,11 +33,11 @@
     <section id="homeView" class="view">
       <section class="hero-card"><h1 id="siteName">This page</h1><p id="overall" class="status">Loading report</p></section>
       <div class="card-grid">
-        <button class="home-card" data-detail="trackers"><span class="group-label">Trackers</span><span class="big"><span id="homeTrackersNumber" class="big-number">0</span><span class="big-word">found</span></span><span id="homeTrackersSub" class="subline">0 blocked · 0 allowed · from 0 companies</span></button>
-        <button class="home-card" data-detail="ads"><span class="group-label">Ads</span><span class="big"><span id="homeAdsNumber" class="big-number">0</span><span class="big-word">blocked</span></span><span id="homeAdsSub" class="subline">0 ad trackers</span></button>
-        <button class="home-card" data-detail="scripts"><span class="group-label">Scripts</span><span class="big"><span id="homeScriptsNumber" class="big-number">0</span><span class="big-word">outside scripts</span></span><span id="homeScriptsSub" class="subline">0 blocked</span></button>
+        <button class="home-card" data-detail="trackers"><span class="group-label">Trackers</span><span class="big"><span class="num"><span id="homeTrackersNumber" class="big-number">0</span><span class="big-number count-ghost" aria-hidden="true"></span></span><span class="big-word">found</span></span><span id="homeTrackersSub" class="subline">0 blocked · 0 allowed · from 0 companies</span></button>
+        <button class="home-card" data-detail="ads"><span class="group-label">Ads</span><span class="big"><span class="num"><span id="homeAdsNumber" class="big-number">0</span><span class="big-number count-ghost" aria-hidden="true"></span></span><span class="big-word">blocked</span></span><span id="homeAdsSub" class="subline">0 ad trackers</span></button>
+        <button class="home-card" data-detail="scripts"><span class="group-label">Scripts</span><span class="big"><span class="num"><span id="homeScriptsNumber" class="big-number">0</span><span class="big-number count-ghost" aria-hidden="true"></span></span><span class="big-word">outside scripts</span></span><span id="homeScriptsSub" class="subline">0 blocked</span></button>
         <button class="home-card" data-detail="cookies"><span class="group-label">Cookies</span><span class="big"><span id="homeCookiesValue" class="big-number text-value">None</span></span><span id="homeCookiesSub" class="subline">0 third-party cookie websites</span></button>
-        <button class="home-card wide" data-detail="fingerprinting"><span class="group-label">Fingerprinting</span><span class="big"><span id="homeFingerprintNumber" class="big-number text-value">None</span><span id="homeFingerprintWord" class="big-word"></span></span><span class="subline">on this page</span></button>
+        <button class="home-card wide" data-detail="fingerprinting"><span class="group-label">Fingerprinting</span><span class="big"><span class="num"><span id="homeFingerprintNumber" class="big-number text-value">None</span><span class="big-number text-value count-ghost" aria-hidden="true"></span></span><span id="homeFingerprintWord" class="big-word"></span></span><span class="subline">on this page</span></button>
       </div>
       <button id="privacyRequestsRow" class="privacy-row" type="button">GPC sent · DNT off</button>
       <footer class="home-footer"><a href="https://privacybrew.app/extension.html" target="_blank" rel="noreferrer">privacybrew.app</a><span>·</span><button id="feedbackButton" type="button">Feedback</button></footer>

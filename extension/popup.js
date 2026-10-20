@@ -9,6 +9,9 @@
   let currentView = 'home';
   let hasHostAccess = true;
   const ALL_SITES = { origins: ['*://*/*'] };
+  const reduceMotion = Boolean(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const COUNT_MS = 320;
+  let countedUp = false;
 
   function text(el, value) {
     el.textContent = value;
@@ -23,6 +26,65 @@
     if (className) el.className = className;
     if (value !== undefined) el.textContent = value;
     return el;
+  }
+
+  // The real number stays in the DOM. Only a hidden copy counts up, so tests and screen readers get the final value.
+  function countUp(el, target) {
+    const box = el.parentElement;
+    const ghost = box && box.querySelector('.count-ghost');
+    if (!ghost || reduceMotion || !(target >= 2)) return;
+    const start = performance.now();
+    box.classList.add('counting');
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / COUNT_MS);
+      ghost.textContent = String(Math.round(target * (1 - Math.pow(1 - t, 3))));
+      if (t < 1 && el.textContent === String(target)) {
+        requestAnimationFrame(step);
+      } else {
+        box.classList.remove('counting');
+        ghost.textContent = '';
+      }
+    };
+    ghost.textContent = '0';
+    requestAnimationFrame(step);
+  }
+
+  function svgIcon(path) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const shape = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    shape.setAttribute('d', path);
+    svg.appendChild(shape);
+    return svg;
+  }
+
+  const ICONS = {
+    page: 'M5 2h9l5 5v15H5V2Zm8 1.5V8h4.5L13 3.5ZM7 11v2h10v-2H7Zm0 4v2h7v-2H7Z',
+    request: 'M12 5c5 0 9 4.5 10 7-1 2.5-5 7-10 7S3 14.5 2 12c1-2.5 5-7 10-7Zm0 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 2.2a1.8 1.8 0 1 1 0 3.6 1.8 1.8 0 0 1 0-3.6Z',
+    blocked: 'M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Zm-1.2 13.6-3.5-3.5 1.4-1.4 2.1 2.1 4.6-4.6 1.4 1.4-6 6Z',
+    allowed: 'M4 11h12.2l-5.6-5.6L12 4l8 8-8 8-1.4-1.4 5.6-5.6H4v-2Z'
+  };
+
+  // A small picture: the page sends a request, and PrivacyBrew blocks it (or lets it go when off).
+  function flowDiagram(requestLabel, blocked, summary) {
+    const flow = make('div', undefined, 'flow');
+    flow.setAttribute('role', 'img');
+    flow.setAttribute('aria-label', summary);
+    const node = (label, icon, className) => {
+      const item = make('div', undefined, 'flow-node ' + className);
+      const badge = make('span', undefined, 'flow-icon');
+      badge.appendChild(svgIcon(ICONS[icon]));
+      item.appendChild(badge);
+      item.appendChild(make('span', label));
+      return item;
+    };
+    flow.appendChild(node('This page', 'page', 'source'));
+    flow.appendChild(make('span', undefined, 'flow-link'));
+    flow.appendChild(node(requestLabel, 'request', 'request'));
+    flow.appendChild(make('span', undefined, 'flow-link ' + (blocked ? 'stop' : 'pass')));
+    flow.appendChild(node(blocked ? 'Blocked' : 'Allowed', blocked ? 'blocked' : 'allowed', 'result' + (blocked ? '' : ' open')));
+    return flow;
   }
 
   async function activeTabId() {
@@ -44,6 +106,8 @@
     }
     $(name + 'View').hidden = false;
     $('backButton').hidden = name === 'home';
+    // Home slides in only when the user comes back to it.
+    document.querySelector('.app').classList.toggle('returning', name === 'home' && currentView !== 'home');
     currentView = name;
     closePowerMenu();
   }
@@ -147,9 +211,10 @@
     }
     document.querySelector('.app').classList.toggle('compact-home', Boolean(status || showWall || needsAccess || needsReload));
 
+    const adCount = off ? 0 : (report.adBlockedRequestCount || 0);
     text($('homeTrackersNumber'), String(trackerCount));
     text($('homeTrackersSub'), `${blocked} blocked · ${allowed} allowed · from ${report.trackerCount || 0} ${plural(report.trackerCount || 0, 'company', 'companies')}`);
-    text($('homeAdsNumber'), String(off ? 0 : (report.adBlockedRequestCount || 0)));
+    text($('homeAdsNumber'), String(adCount));
     text($('homeAdsSub'), `${report.adTrackerCount || 0} ad trackers`);
     text($('homeScriptsNumber'), String(report.outsideScriptCount || 0));
     text($('homeScriptsSub'), `${off ? 0 : (report.outsideScriptBlockedCount || 0)} blocked`);
@@ -161,10 +226,21 @@
     text($('privacyRequestsRow'), `${settings.gpcEnabled ? 'GPC sent' : 'GPC off'} · ${settings.dntEnabled ? 'DNT sent' : 'DNT off'}`);
     $('powerButton').classList.toggle('off', off);
     renderPowerMenu(report);
+    if (!countedUp && currentView === 'home') {
+      countedUp = true;
+      countUp($('homeTrackersNumber'), trackerCount);
+      countUp($('homeAdsNumber'), adCount);
+      countUp($('homeScriptsNumber'), report.outsideScriptCount || 0);
+      countUp($('homeFingerprintNumber'), fingerprintCount);
+    }
   }
 
   function trackerDetail(report) {
     const wrap = make('div');
+    const blocking = !protectionOff(report);
+    wrap.appendChild(flowDiagram('Tracker request', blocking, blocking
+      ? 'The page sends a tracker request. PrivacyBrew blocks it.'
+      : 'The page sends a tracker request. PrivacyBrew is off, so it does not block the request.'));
     wrap.appendChild(make('p', report.blockedTrackerCount ? `PrivacyBrew blocked ${report.blockedTrackerCount} tracker ${plural(report.blockedTrackerCount, 'request')}.` : 'No known tracker companies found.', 'muted'));
     for (const tracker of report.trackers || []) {
       const card = make('section', undefined, 'detail-card');
@@ -200,7 +276,11 @@
       node = trackerDetail(report);
     } else if (kind === 'ads') {
       title = 'Ads';
+      const blockingAds = !protectionOff(report) && Boolean(report.settings && report.settings.adBlockingEnabled);
       node = simpleDetail([
+        flowDiagram('Ad request', blockingAds, blockingAds
+          ? 'The page sends an ad request. PrivacyBrew blocks it.'
+          : 'The page sends an ad request. PrivacyBrew does not block it now.'),
         make('p', `${report.adBlockedRequestCount || 0} ad requests blocked.`),
         make('p', "It's not a sign. It's a targeted ad.", 'muted'),
         make('p', 'PrivacyBrew counts requests to ad companies. It does not count the ads that you see.', 'muted')
@@ -371,6 +451,9 @@
       await chrome.tabs.create({ url: 'https://privacybrew.app/feedback.html?' + params.toString() });
     });
   }
+
+  // The rise-in plays only when the popup opens, not each time the home view comes back.
+  setTimeout(() => document.querySelector('.app').classList.remove('intro'), reduceMotion ? 0 : 600);
 
   (async () => {
     bind();
