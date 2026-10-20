@@ -72,12 +72,14 @@ return s;
     if 'exceptionDetails' in res:
         raise RuntimeError(res['exceptionDetails'])
 
-def open_popup(cdp, ext, sw, name, action=None, state='normal', expect=None):
+def open_popup(cdp, ext, sw, name, action=None, state='normal', expect=None, settle=.8, reduced=False):
     target=cdp.call('Target.createTarget', {'url': f'chrome-extension://{ext}/popup.html'})['targetId']; sess=attach(cdp,target); cdp.call('Page.enable', sessionId=sess); cdp.call('Emulation.setDeviceMetricsOverride', {'width':380,'height':580,'deviceScaleFactor':SCALE,'mobile':False}, sess)
+    if reduced:
+        cdp.call('Emulation.setEmulatedMedia', {'features': [{'name': 'prefers-reduced-motion', 'value': 'reduce'}]}, sess)
     time.sleep(.5)
     tab_id = 424242 + abs(hash(name)) % 10000
     create_state(cdp, sw, tab_id, state=state)
-    cdp.call('Page.navigate', {'url': f'chrome-extension://{ext}/popup.html?tabId={tab_id}'}, sess); time.sleep(.8)
+    cdp.call('Page.navigate', {'url': f'chrome-extension://{ext}/popup.html?tabId={tab_id}'}, sess); time.sleep(settle)
     if action:
         cdp.call('Runtime.evaluate', {'expression': action}, sess); time.sleep(1.5 if expect else .5)
     data=cdp.call('Page.captureScreenshot', {'format':'png'}, sess)['data']
@@ -93,13 +95,22 @@ def open_popup(cdp, ext, sw, name, action=None, state='normal', expect=None):
         FAILURES.extend([] if got is True else [f'{name}: expectation failed ({got})'])
 
 FAILURES=[]
+# After the popup settles, only the soft power pulse (infinite) may still run. No count-up copy may stay visible.
+SETTLED = "(()=>{const run=document.getAnimations().filter(a=>a.playState==='running'&&a.effect.getTiming().iterations!==Infinity).length;const c=document.querySelectorAll('.num.counting').length;return (run===0&&c===0)||`running=${run} counting=${c}`})()"
+# Reduced motion: no animation at all and the final numbers at once.
+STILL = "(()=>{const n=document.getAnimations().length;const c=document.querySelectorAll('.num.counting').length;return (n===0&&c===0&&document.querySelector('#homeTrackersNumber').textContent==='4')||`animations=${n} counting=${c}`})()"
 
 if __name__=='__main__':
     proc=None; prof=None
     try:
         proc,cdp,ext,sw,prof=launch()
-        open_popup(cdp,ext,sw,'pb-ext-home.png')
+        open_popup(cdp,ext,sw,'pb-ext-home.png', expect=SETTLED)
+        open_popup(cdp,ext,sw,'pb-ext-home-reduced-motion.png', state='normal', expect=STILL, settle=.25, reduced=True)
+        # A frame in the middle of the rise-in, for review only.
+        open_popup(cdp,ext,sw,'pb-ext-home-intro-frame.png', settle=.12)
+        open_popup(cdp,ext,sw,'pb-ext-detail-ads.png', "document.querySelector('[data-detail=ads]').click()")
         open_popup(cdp,ext,sw,'pb-ext-detail-trackers.png', "document.querySelector('[data-detail=trackers]').click(); setTimeout(()=>{const d=document.querySelector('details'); if(d)d.open=true},50)")
+        open_popup(cdp,ext,sw,'pb-ext-detail-trackers-reduced-motion.png', "document.querySelector('[data-detail=trackers]').click()", expect="document.getAnimations().length===0||`animations=${document.getAnimations().length}`", reduced=True)
         open_popup(cdp,ext,sw,'pb-ext-settings.png', "document.querySelector('#settingsButton').click()")
         open_popup(cdp,ext,sw,'pb-ext-power-menu.png', "document.querySelector('#powerButton').click()")
         open_popup(cdp,ext,sw,'pb-ext-power-menu-while.png', "document.querySelector('#powerButton').click(); document.querySelector('#forAWhileButton').click()")
