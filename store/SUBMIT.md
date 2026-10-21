@@ -61,4 +61,7 @@ TODO: Update the website button from Coming soon to the Chrome Web Store URL.
 No account or login is needed.
 ```
 - 2026-10-20: Version 1.0.2 approved and published on the Chrome Web Store (owner confirmed).
-
+- 2026-10-21: Version 1.0.3 prepared. Popup refresh: glassy cards, count-up numbers, a small
+  "how it works" flow in Trackers and Ads, calm motion (none with reduced motion). Same
+  permissions and file list as 1.0.2.
+  ZIP SHA-256: aee5625b0d770176aa565c3892c1c3881852be751715c50dcbf6835cb64eb243
