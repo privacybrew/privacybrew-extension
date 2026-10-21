@@ -60,4 +60,5 @@ TODO: Update the website button from Coming soon to the Chrome Web Store URL.
    https://www.theguardian.com (Cookies: Hidden). PrivacyBrew never selects "Accept all".
 No account or login is needed.
 ```
+- 2026-10-20: Version 1.0.2 approved and published on the Chrome Web Store (owner confirmed).
 

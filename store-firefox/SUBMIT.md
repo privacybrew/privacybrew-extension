@@ -82,4 +82,7 @@ The Firefox build also declares `gecko_android` with `strict_min_version` 142.0.
 - 2026-10-17: Version 1.0.2 prepared while 1.0.0 waits for review. Same fixes as Chrome 1.0.2
   (correct site in reports, no stale report after navigation, reload notice). Source commit 7210a68.
   ZIP SHA-256: 612836eb3eb9aff196f8936a4b172cff8c4d941b1fb90358983614bb4498048a
+- 2026-10-20: Version 1.0.2 approved and published for Firefox and Firefox for Android:
+  https://addons.mozilla.org/en-US/firefox/addon/privacybrew/
+  README and website (extension.html) updated with the Firefox link.
 

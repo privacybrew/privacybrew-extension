@@ -2,7 +2,7 @@
 
 **Install:** [PrivacyBrew on the Chrome Web Store](https://chromewebstore.google.com/detail/privacybrew-tracker-ad-bl/hdhjekomkdacaliekmmdilaanalclhib) (works in Chrome, Edge and Brave).
 
-**Firefox:** Firefox Add-ons link coming soon. See [Firefox](#firefox).
+**Firefox:** [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/privacybrew/) (desktop and Android). See [Firefox](#firefox).
 
 PrivacyBrew is a Manifest V3 prototype for Chrome, Edge, Brave, Opera, and Firefox. It shows a plain-language privacy report card for the current website.
 
@@ -135,7 +135,7 @@ Minimum Chrome version is 119. PrivacyBrew uses Manifest V3, dynamic content scr
 
 ## Firefox
 
-**Install:** Firefox Add-ons link coming soon (FIREFOX_ADDON_URL).
+**Install:** [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/privacybrew/).
 
 The same `extension/` code runs in Firefox 140 or newer, and in Firefox for Android 142 or newer. `tools/package.py --target firefox` makes the Firefox build:
 
