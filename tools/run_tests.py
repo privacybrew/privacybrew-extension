@@ -556,6 +556,91 @@ def run_e2e(cdp):
     shot = cdp.call('Page.captureScreenshot', {'format': 'png', 'captureBeyondViewport': True}, popup_session)['data']
     shot_path = ART / 'pb-ext-popup.png'
     shot_path.write_bytes(base64.b64decode(shot))
+    # Outside scripts: details in the popup; Block all / Allow all for the website; Block / Allow / Undo per script.
+    ga_url = f'http://www.google-analytics.com:{PORT}/ga.js'
+    unknown_url = f'http://cdn.some-unknown-thirdparty.example:{PORT}/unknown.js'
+    # Allow tests use the DoubleClick script. Chrome upgrades google-analytics.com, bing.com and
+    # facebook.net to https (HSTS preload) once a request is allowed, and the test server has no https.
+    allow_url = f'http://static.doubleclick.net:{PORT}/ad.js'
+    def choose_script(url, choice):
+        res = eval_value(cdp, popup_session, "chrome.runtime.sendMessage({type:'setScriptChoice', tabId:%d, url:%s, choice:'%s'})" % (tab_id, json.dumps(url), choice))
+        if not (res and res.get('ok')): print('script choice', choice, url, res, file=sys.stderr)
+        return bool(res and res.get('ok'))
+    def reload_tracker_page():
+        navigate_and_wait(cdp, session, f'http://site.test:{PORT}/tracker.html')
+        time.sleep(0.6)
+        return eval_value(cdp, session, "({ad: window.__pbDoubleClickRan === true, unknown: window.__pbUnknownRan === true})")
+    script_rows = eval_value(cdp, popup_session, """(async () => {
+      document.querySelector('[data-detail="scripts"]').click();
+      await new Promise(r => setTimeout(r, 300));
+      const rows = [...document.querySelectorAll('#detailContent .script-row')].map(r => r.textContent);
+      const all = (document.querySelector('#detailContent .script-all') || {}).textContent || '';
+      document.querySelector('#backButton').click();
+      return rows.concat(['ALL:' + all]);
+    })()""") or []
+    all_row = next((r for r in script_rows if r.startswith('ALL:')), '')
+    script_rows = [r for r in script_rows if not r.startswith('ALL:')]
+    checks.append(('script detail lists each outside script', len(script_rows) >= 6))
+    checks.append(('script detail has Block all and Allow all', 'Block all' in all_row and 'Allow all' in all_row))
+    checks.append(('script detail has no allow for now', not any('for now' in r for r in script_rows)))
+    checks.append(('script detail shows blocked tracker script', any(r.startswith('ga.js') and 'Blocked' in r and 'Allow' in r for r in script_rows)))
+    checks.append(('script detail offers block for loaded script', any(r.startswith('unknown.js') and 'Allowed' in r and 'Block' in r for r in script_rows)))
+    # Ads card details: blocked ad requests with kind and owner, and ad companies.
+    ad_report = summarize_state(cdp, sw_session, tab_id)
+    ad_items = ad_report.get('adItems', [])
+    checks.append(('ad details list blocked ad requests', len(ad_items) == ad_report.get('adBlockedRequestCount') and len(ad_items) >= 2))
+    checks.append(('ad details have request kind', any(item.get('type') == 'script' for item in ad_items)))
+    checks.append(('ad details have ad company', any(item.get('company') == 'Google' for item in ad_items)))
+    ads_text = eval_value(cdp, popup_session, """(async () => {
+      document.querySelector('[data-detail="ads"]').click();
+      await new Promise(r => setTimeout(r, 300));
+      const t = document.querySelector('#detailContent').textContent;
+      document.querySelector('#backButton').click();
+      return t;
+    })()""") or ''
+    checks.append(('ads detail shows blocked requests and ad companies', 'Blocked ad requests' in ads_text and 'Ad companies on this page' in ads_text and 'googleads.g.doubleclick.net' in ads_text))
+    report_items = {item['url']: item for item in summarize_state(cdp, sw_session, tab_id).get('outsideScriptItems', [])}
+    checks.append(('script item has tracker company', report_items.get(ga_url, {}).get('company') == 'Google'))
+    checks.append(('script choice refused for script not on page', choose_script('http://not-on-page.example/x.js', 'allow') is False))
+    checks.append(('script allow accepted', choose_script(allow_url, 'allow') is True))
+    ran = reload_tracker_page()
+    checks.append(('allowed script runs', ran.get('ad') is True))
+    checks.append(('script undo accepted', choose_script(allow_url, 'reset') is True))
+    ran = reload_tracker_page()
+    checks.append(('script blocked again after undo', ran.get('ad') is False))
+    checks.append(('allow for now is refused', choose_script(allow_url, 'tempAllow') is False))
+    checks.append(('block all accepted', choose_script('', 'blockAll') is True))
+    ran = reload_tracker_page()
+    checks.append(('block all stops a loaded outside script', ran.get('unknown') is False))
+    checks.append(('one-script allow accepted under block all', choose_script(unknown_url, 'allow') is True))
+    ran = reload_tracker_page()
+    checks.append(('one-script allow wins over block all', ran.get('unknown') is True))
+    choose_script(unknown_url, 'reset')
+    checks.append(('allow all accepted', choose_script('', 'allowAll') is True))
+    ran = reload_tracker_page()
+    checks.append(('allow all lets a listed tracker script run', ran.get('ad') is True and ran.get('unknown') is True))
+    checks.append(('one-script block accepted under allow all', choose_script(allow_url, 'block') is True))
+    ran = reload_tracker_page()
+    checks.append(('one-script block wins over allow all', ran.get('ad') is False))
+    choose_script(allow_url, 'reset')
+    checks.append(('undo all accepted', choose_script('', 'resetAll') is True))
+    ran = reload_tracker_page()
+    checks.append(('undo all restores the lists', ran.get('ad') is False and ran.get('unknown') is True))
+    checks.append(('script block accepted', choose_script(unknown_url, 'block') is True))
+    ran = reload_tracker_page()
+    checks.append(('blocked script does not run', ran.get('unknown') is False))
+    reload_tracker_page()
+    choose_script('', 'blockAll')
+    eval_value(cdp, sw_session, "setGlobalOff(true).then(() => true)")
+    off_blocks = eval_value(cdp, sw_session, "chrome.declarativeNetRequest.getDynamicRules().then(rs => rs.filter(r => ((r.id >= SCRIPT_RULE_BASE && r.id < SCRIPT_RULE_BASE + SCRIPT_RULE_MAX) || (r.id >= SCRIPT_SITE_RULE_BASE && r.id < SCRIPT_SITE_RULE_BASE + SCRIPT_RULE_MAX)) && r.action.type === 'block').length)")
+    checks.append(('script block rules removed when PrivacyBrew is off', off_blocks == 0))
+    eval_value(cdp, sw_session, "setGlobalOff(false).then(() => true)")
+    reload_tracker_page()
+    choose_script(unknown_url, 'reset')
+    choose_script('', 'resetAll')
+    left = eval_value(cdp, sw_session, "chrome.declarativeNetRequest.getDynamicRules().then(rs => rs.filter(r => r.id >= SCRIPT_RULE_BASE && r.id < SCRIPT_SITE_RULE_BASE + SCRIPT_RULE_MAX).length)")
+    checks.append(('no script rules left after undo', left == 0))
+    reload_tracker_page()
     cdp.call('Runtime.evaluate', {'expression': "setAdBlocking(false)", 'awaitPromise': True}, sw_session)
     navigate_and_wait(cdp, session, f'http://site.test:{PORT}/tracker.html')
     ads_off_vars = eval_value(cdp, session, '({adHost: window.__pbAdHostRan, adPath: window.__pbAdPathRan, adBox: getComputedStyle(document.querySelector(\"#ADbox\")).display, allowedAd: window.__pbAllowedAdRan})')
@@ -660,3 +745,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

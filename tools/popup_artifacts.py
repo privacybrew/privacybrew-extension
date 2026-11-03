@@ -56,8 +56,11 @@ PB.Report.addTracker(s, disconnect.find('www.google-analytics.com'), 'www.google
 PB.Report.addTracker(s, disconnect.find('static.doubleclick.net'), 'static.doubleclick.net', 'blocked', 'https://static.doubleclick.net/ad.js');
 PB.Report.addTracker(s, disconnect.find('connect.facebook.net'), 'connect.facebook.net', 'blocked', 'https://connect.facebook.net/s.js');
 PB.Report.addTracker(s, disconnect.find('bat.bing.com'), 'bat.bing.com', 'allowed', 'https://bat.bing.com/b.js');
-PB.Report.addAdBlocked(s, 'https://googleads.g.doubleclick.net/pagead/ad.js');
+PB.Report.addAdBlocked(s, 'https://googleads.g.doubleclick.net/pagead/ad.js', {{type: 'script', company: 'Google', category: 'Advertising'}});
+PB.Report.addAdBlocked(s, 'https://googleads.g.doubleclick.net/pagead/viewthroughconversion/123/', {{type: 'image', company: 'Google', category: 'Advertising'}});
 PB.Report.addOutsideScript(s, 'https://cdn.news.example/story.js', 'allowed');
+PB.Report.addOutsideScript(s, 'https://www.google-analytics.com/analytics.js', 'blocked', {{company: 'Google', category: 'Analytics'}});
+PB.Report.addOutsideScript(s, 'https://connect.facebook.net/en_US/fbevents.js', 'blocked', {{company: 'Meta', category: 'Advertising'}});
 PB.Report.addFingerprint(s, 'canvas', 'https://{site}/fp.js');
 PB.Report.addFingerprint(s, 'webgl', 'https://{site}/fp.js');
 PB.Report.addCookie(s, 'static.doubleclick.net');
@@ -108,7 +111,10 @@ if __name__=='__main__':
         open_popup(cdp,ext,sw,'pb-ext-home-reduced-motion.png', state='normal', expect=STILL, settle=.25, reduced=True)
         # A frame in the middle of the rise-in, for review only.
         open_popup(cdp,ext,sw,'pb-ext-home-intro-frame.png', settle=.12)
-        open_popup(cdp,ext,sw,'pb-ext-detail-ads.png', "document.querySelector('[data-detail=ads]').click()")
+        open_popup(cdp,ext,sw,'pb-ext-detail-ads.png', "document.querySelector('[data-detail=ads]').click()", expect="document.body.textContent.includes('Blocked ad requests')||'no ad list'")
+        open_popup(cdp,ext,sw,'pb-ext-detail-scripts.png', "document.querySelector('[data-detail=scripts]').click()", expect="document.querySelectorAll('.script-row').length===3||`rows=${document.querySelectorAll('.script-row').length}`")
+        open_popup(cdp,ext,sw,'pb-ext-detail-scripts-choice.png', "document.querySelector('[data-detail=scripts]').click(); setTimeout(()=>document.querySelector('.script-row .script-action').click(),200)", expect="Boolean(document.querySelector('.script-notice'))&&document.body.textContent.includes('You allowed this script.')||'no notice'", settle=1.5)
+        open_popup(cdp,ext,sw,'pb-ext-detail-scripts-block-all.png', "document.querySelector('[data-detail=scripts]').click(); setTimeout(()=>document.querySelector('.script-all .script-action').click(),200)", expect="document.body.textContent.includes('You blocked all outside scripts on this website.')||'no block-all note'", settle=1.5)
         open_popup(cdp,ext,sw,'pb-ext-detail-trackers.png', "document.querySelector('[data-detail=trackers]').click(); setTimeout(()=>{const d=document.querySelector('details'); if(d)d.open=true},50)")
         open_popup(cdp,ext,sw,'pb-ext-detail-trackers-reduced-motion.png', "document.querySelector('[data-detail=trackers]').click()", expect="document.getAnimations().length===0||`animations=${document.getAnimations().length}`", reduced=True)
         open_popup(cdp,ext,sw,'pb-ext-settings.png', "document.querySelector('#settingsButton').click()")

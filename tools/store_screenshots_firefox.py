@@ -49,8 +49,8 @@ def slide(path, title, body, img):
     """Like store_screenshots.slide, but the frame matches the 380x580 popup, so no empty strip shows."""
     im = ss.bg()
     d = ss.ImageDraw.Draw(im)
-    ss.draw_wrapped(d, (70, 135), title, ss.FONT_BIG, ss.TEXT, 620)
-    ss.draw_wrapped(d, (74, 270), body, ss.FONT, ss.DIM, 610)
+    y = ss.draw_wrapped(d, (70, 135), title, ss.FONT_BIG, ss.TEXT, 620)
+    ss.draw_wrapped(d, (74, y + 28), body, ss.FONT, ss.DIM, 610)
     w = 390
     h = 28 + round((w - 28) * img.height / img.width)
     ss.frame(im, img, (790, (800 - h) // 2), (w, h))

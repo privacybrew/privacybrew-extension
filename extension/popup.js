@@ -261,6 +261,191 @@
     return wrap;
   }
 
+  // Outside scripts, grouped by the website that sends them. On this website you
+  // can block or allow all outside scripts, and block or allow one script.
+  // A choice for one script wins over the choice for all scripts.
+  let scriptsChanged = false;
+  const CHOICE_NOTES = { allow: 'You allowed this script.', block: 'You blocked this script.' };
+  const SITE_CHOICE_NOTES = { allowAll: 'You allowed all outside scripts on this website.', blockAll: 'You blocked all outside scripts on this website.' };
+
+  function scriptName(url) {
+    try {
+      const path = new URL(url).pathname;
+      const last = path.split('/').filter(Boolean).pop();
+      return last || path || url;
+    } catch (_) {
+      return url;
+    }
+  }
+
+  async function chooseScript(url, choice) {
+    const scroller = $('detailContent');
+    const top = scroller.scrollTop;
+    const response = await chrome.runtime.sendMessage({ type: 'setScriptChoice', tabId: currentTabId, url, choice });
+    if (!response || !response.ok) return;
+    scriptsChanged = true;
+    await refresh();
+    renderDetail('scripts');
+    $('detailContent').scrollTop = top;
+  }
+
+  function scriptButton(label, url, choice) {
+    const button = make('button', label, 'script-action');
+    button.type = 'button';
+    button.addEventListener('click', () => chooseScript(url, choice).catch(() => {}));
+    return button;
+  }
+
+  function scriptsDetail(report) {
+    const wrap = make('div');
+    const items = report.outsideScriptItems || [];
+    const choices = report.scriptChoices || {};
+    const off = protectionOff(report);
+    if (scriptsChanged) {
+      const notice = make('div', undefined, 'script-notice');
+      notice.appendChild(make('span', 'Reload the page to use your choice.'));
+      const reload = make('button', 'Reload', 'script-action');
+      reload.type = 'button';
+      reload.addEventListener('click', async () => {
+        scriptsChanged = false;
+        await chrome.runtime.sendMessage({ type: 'reloadTab', tabId: currentTabId });
+        window.close();
+      });
+      notice.appendChild(reload);
+      wrap.appendChild(notice);
+    }
+    wrap.appendChild(make('p', `${report.outsideScriptCount || 0} outside ${plural(report.outsideScriptCount || 0, 'script')}. ${off ? 0 : (report.outsideScriptBlockedCount || 0)} blocked.`));
+    if (!items.length) {
+      wrap.appendChild(make('p', 'No outside scripts found on this page.', 'muted'));
+      return wrap;
+    }
+    wrap.appendChild(make('p', 'Outside scripts come from other websites. Some show ads or track you. Some are necessary for the page.', 'muted'));
+    if (off) wrap.appendChild(make('p', 'PrivacyBrew is off, so it does not block scripts now.', 'muted'));
+    else wrap.appendChild(make('p', 'Your choices apply only on this website. A choice for one script wins over "Block all" and "Allow all".', 'muted'));
+    const siteChoice = report.scriptSiteChoice || '';
+    const all = make('section', undefined, 'detail-card script-all');
+    all.appendChild(make('strong', 'All outside scripts on this website'));
+    if (siteChoice) all.appendChild(make('p', SITE_CHOICE_NOTES[siteChoice] || '', 'muted script-note'));
+    const allActions = make('div', undefined, 'script-actions');
+    if (siteChoice !== 'blockAll') allActions.appendChild(scriptButton('Block all', '', 'blockAll'));
+    if (siteChoice !== 'allowAll') allActions.appendChild(scriptButton('Allow all', '', 'allowAll'));
+    if (siteChoice) allActions.appendChild(scriptButton('Undo', '', 'resetAll'));
+    all.appendChild(allActions);
+    wrap.appendChild(all);
+    const groups = new Map();
+    for (const item of items) {
+      if (!groups.has(item.host)) groups.set(item.host, []);
+      groups.get(item.host).push(item);
+    }
+    for (const [host, scripts] of groups) {
+      const card = make('section', undefined, 'detail-card');
+      const head = make('div');
+      head.appendChild(make('strong', host || 'Unknown website'));
+      const first = scripts.find((item) => item.company) || {};
+      if (first.company) head.appendChild(make('span', first.company, 'chip'));
+      if (first.category) head.appendChild(make('span', first.category, 'chip'));
+      card.appendChild(head);
+      for (const item of scripts) {
+        const row = make('div', undefined, 'script-row');
+        const name = make('div', scriptName(item.url), 'script-name');
+        name.title = item.url;
+        row.appendChild(name);
+        const blocked = item.status === 'blocked';
+        // A loaded script from a known tracker company gets the warning colour. Other loaded scripts stay neutral.
+        row.appendChild(make('p', blocked ? 'Blocked' : 'Allowed', blocked ? 'blocked' : (item.company ? 'allowed' : 'neutral')));
+        const choice = choices[item.url];
+        if (choice) row.appendChild(make('p', CHOICE_NOTES[choice] || '', 'muted script-note'));
+        const actions = make('div', undefined, 'script-actions');
+        if (choice === 'allow') actions.appendChild(scriptButton('Block', item.url, 'block'));
+        else if (choice === 'block' || blocked) actions.appendChild(scriptButton('Allow', item.url, 'allow'));
+        else actions.appendChild(scriptButton('Block', item.url, 'block'));
+        if (choice) actions.appendChild(scriptButton('Undo', item.url, 'reset'));
+        row.appendChild(actions);
+        card.appendChild(row);
+      }
+      wrap.appendChild(card);
+    }
+    return wrap;
+  }
+
+  // Plain words for the kind of request that the browser reports.
+  const REQUEST_KINDS = { script: 'script', image: 'image', sub_frame: 'frame', xmlhttprequest: 'data request', ping: 'ping', beacon: 'ping', media: 'video or audio', stylesheet: 'style', font: 'font', websocket: 'connection', imageset: 'image', object: 'plug-in' };
+
+  function requestName(url) {
+    try {
+      const parts = new URL(url).pathname.split('/').filter(Boolean);
+      const last = parts.pop();
+      if (!last) return url;
+      // A name without letters (for example "123") says little, so add the part before it.
+      return !/[A-Za-z]/.test(last) && parts.length ? parts.pop() + '/' + last : last;
+    } catch (_) {
+      return url;
+    }
+  }
+
+  // Ads: the blocked ad requests, grouped by the website they go to, and the
+  // ad companies that PrivacyBrew found on this page.
+  function adsDetail(report, blockingAds) {
+    const wrap = make('div');
+    wrap.appendChild(flowDiagram('Ad request', blockingAds, blockingAds
+      ? 'The page sends an ad request. PrivacyBrew blocks it.'
+      : 'The page sends an ad request. PrivacyBrew does not block it now.'));
+    const count = report.adBlockedRequestCount || 0;
+    wrap.appendChild(make('p', `${count} ad ${plural(count, 'request')} blocked.`));
+    wrap.appendChild(make('p', "It's not a sign. It's a targeted ad.", 'muted'));
+    wrap.appendChild(make('p', 'PrivacyBrew counts requests to ad companies. It does not count the ads that you see.', 'muted'));
+    if (blockingAds && report.adHidCount) wrap.appendChild(make('p', 'PrivacyBrew also hid empty ad spaces on this page.', 'muted'));
+
+    const items = report.adItems || [];
+    if (items.length) {
+      wrap.appendChild(make('h3', 'Blocked ad requests'));
+      const groups = new Map();
+      for (const item of items) {
+        if (!groups.has(item.host)) groups.set(item.host, []);
+        groups.get(item.host).push(item);
+      }
+      for (const [host, requests] of groups) {
+        const card = make('section', undefined, 'detail-card');
+        const head = make('div');
+        head.appendChild(make('strong', host || 'Unknown website'));
+        const owner = requests.find((item) => item.company) || {};
+        if (owner.company) head.appendChild(make('span', owner.company, 'chip'));
+        head.appendChild(make('span', `${requests.length} ${plural(requests.length, 'request')}`, 'chip'));
+        card.appendChild(head);
+        const list = make('ul', undefined, 'ad-list');
+        for (const item of requests) {
+          const row = make('li');
+          const name = make('span', requestName(item.url), 'script-name');
+          name.title = item.url;
+          row.appendChild(name);
+          const kind = REQUEST_KINDS[item.type] || '';
+          if (kind) row.appendChild(make('span', kind, 'chip'));
+          list.appendChild(row);
+        }
+        card.appendChild(list);
+        wrap.appendChild(card);
+      }
+    } else if (blockingAds) {
+      wrap.appendChild(make('p', 'No ad requests blocked on this page.', 'muted'));
+    }
+
+    const adCompanies = (report.trackers || []).filter((tracker) => (tracker.categories || []).includes('Advertising'));
+    if (adCompanies.length) {
+      wrap.appendChild(make('h3', 'Ad companies on this page'));
+      for (const tracker of adCompanies) {
+        const card = make('section', undefined, 'detail-card');
+        const head = make('div');
+        head.appendChild(make('strong', tracker.company));
+        card.appendChild(head);
+        card.appendChild(make('p', tracker.status, tracker.status === 'Blocked' ? 'blocked' : 'allowed'));
+        const domains = tracker.domains || [];
+        if (domains.length) card.appendChild(make('p', domains.join(', '), 'muted ad-domains'));
+        wrap.appendChild(card);
+      }
+    }
+    return wrap;
+  }
+
   function simpleDetail(children) {
     const wrap = make('div');
     for (const child of children) wrap.appendChild(child);
@@ -277,17 +462,10 @@
     } else if (kind === 'ads') {
       title = 'Ads';
       const blockingAds = !protectionOff(report) && Boolean(report.settings && report.settings.adBlockingEnabled);
-      node = simpleDetail([
-        flowDiagram('Ad request', blockingAds, blockingAds
-          ? 'The page sends an ad request. PrivacyBrew blocks it.'
-          : 'The page sends an ad request. PrivacyBrew does not block it now.'),
-        make('p', `${report.adBlockedRequestCount || 0} ad requests blocked.`),
-        make('p', "It's not a sign. It's a targeted ad.", 'muted'),
-        make('p', 'PrivacyBrew counts requests to ad companies. It does not count the ads that you see.', 'muted')
-      ]);
+      node = adsDetail(report, blockingAds);
     } else if (kind === 'scripts') {
       title = 'Outside scripts';
-      node = simpleDetail([make('p', `${report.outsideScriptCount || 0} outside scripts. ${report.outsideScriptBlockedCount || 0} blocked.`)]);
+      node = scriptsDetail(report);
     } else if (kind === 'cookies') {
       title = 'Cookies';
       const popup = report.cookiePopup || { label: 'No pop-up found' };

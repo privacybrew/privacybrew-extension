@@ -15,10 +15,12 @@ if not HEADLESS and not (__import__('os').environ.get('DISPLAY') or __import__('
     raise SystemExit('--headed needs DISPLAY or WAYLAND_DISPLAY')
 HOSTS = ['news.example', 'shop.example', 'www.google-analytics.com', 'static.doubleclick.net', 'connect.facebook.net', 'bat.bing.com', 'googleads.g.doubleclick.net']
 BG = '#120a1a'; PANEL = '#1f1329'; BORDER = '#3a2c4a'; ACC = '#9b6dd1'; GREEN = '#5fae96'; TEXT = '#f0eaf7'; DIM = '#b8a8c9'
-FONT_BIG = ImageFont.truetype('DejaVuSans-Bold.ttf', 54)
-FONT_MED = ImageFont.truetype('DejaVuSans-Bold.ttf', 34)
-FONT = ImageFont.truetype('DejaVuSans.ttf', 25)
-FONT_SMALL = ImageFont.truetype('DejaVuSans.ttf', 20)
+# Brand fonts for store images (SIL OFL 1.1, see tools/fonts/OFL-*.txt). Build-time only.
+FONTS = ROOT / 'tools' / 'fonts'
+FONT_BIG = ImageFont.truetype(str(FONTS / 'Fraunces-Bold.ttf'), 56)
+FONT_MED = ImageFont.truetype(str(FONTS / 'Fraunces-Bold.ttf'), 36)
+FONT = ImageFont.truetype(str(FONTS / 'IBMPlexSans-Regular.ttf'), 25)
+FONT_SMALL = ImageFont.truetype(str(FONTS / 'IBMPlexSans-Regular.ttf'), 20)
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *args): pass
@@ -125,7 +127,8 @@ def popup_element(cdp, ext, tab_id, selector):
     tmp = ROOT/'artifacts'/'tmp-shot.png'; tmp.write_bytes(base64.b64decode(data)); return Image.open(tmp).convert('RGBA')
 
 def bg():
-    im=Image.new('RGBA',(1280,800),BG); glow=Image.new('RGBA',(1280,800),(0,0,0,0)); d=ImageDraw.Draw(glow); d.ellipse((520,-220,1450,620), fill=(155,109,209,72)); return Image.alpha_composite(im, glow.filter(ImageFilter.GaussianBlur(70)))
+    # Flat background: no glow (avoids the generic purple-glow look).
+    return Image.new('RGBA',(1280,800),BG)
 def draw_wrapped(d, xy, text, font, fill, width, linegap=8):
     x,y=xy
     for para in text.split('\n'):
@@ -142,7 +145,7 @@ def frame(base,img,xy,size):
     x,y=xy; w,h=size; sh=Image.new('RGBA',base.size,(0,0,0,0)); sd=ImageDraw.Draw(sh); sd.rounded_rectangle((x+14,y+18,x+w+14,y+h+18),24,fill=(0,0,0,95)); base.alpha_composite(sh.filter(ImageFilter.GaussianBlur(18)))
     d=ImageDraw.Draw(base); d.rounded_rectangle((x,y,x+w,y+h),24,fill=PANEL,outline=BORDER,width=3); img.thumbnail((w-28,h-28), Image.Resampling.LANCZOS); base.alpha_composite(img,(x+14,y+14))
 def slide(path,title,body,img):
-    im=bg(); d=ImageDraw.Draw(im); draw_wrapped(d,(70,135),title,FONT_BIG,TEXT,620); draw_wrapped(d,(74,270),body,FONT,DIM,610); frame(im,img,(790,85),(390,630)); im.convert('RGB').save(path)
+    im=bg(); d=ImageDraw.Draw(im); y=draw_wrapped(d,(70,135),title,FONT_BIG,TEXT,620); draw_wrapped(d,(74,y+28),body,FONT,DIM,610); frame(im,img,(790,85),(390,630)); im.convert('RGB').save(path)
 def cookie_slide(path,before,after,card):
     im=bg(); d=ImageDraw.Draw(im); draw_wrapped(d,(70,44),'Cookie pop-up help',FONT_BIG,TEXT,1100); draw_wrapped(d,(72,114),'PrivacyBrew rejects optional cookies for you. It never selects Accept all.',FONT,DIM,1140)
     d.text((70,176),'Before',font=FONT_MED,fill=TEXT); d.text((670,176),'After',font=FONT_MED,fill=TEXT)

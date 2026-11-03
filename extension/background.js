@@ -17,6 +17,20 @@ let adIndexData = null;
 let autoconsentRules = null;
 let autoconsentEvalSnippets = null;
 const PAUSE_RULE_BASE = 100000;
+const PAUSE_RULE_RANGE = 1000000;
+// Your choices for outside scripts on one website, kept as dynamic rules:
+// - one script: "Allow" or "Block" (priority 5000)
+// - all outside scripts: "Allow all" or "Block all" (priority 4000)
+// One-script choices win over the "all" choice. Both are above all list rules
+// (300 or lower) and below the "PrivacyBrew is off on this website" rule
+// (10000), so turning PrivacyBrew off still wins.
+const SCRIPT_RULE_BASE = 5000000;
+const SCRIPT_RULE_MAX = 5000;
+const SCRIPT_RULE_PRIORITY = 5000;
+const SCRIPT_SITE_RULE_BASE = 7000000;
+const SCRIPT_SITE_RULE_PRIORITY = 4000;
+const SCRIPT_CHOICES = new Set(['allow', 'block', 'reset']);
+const SCRIPT_SITE_CHOICES = new Set(['allowAll', 'blockAll', 'resetAll']);
 const SAME_COMPANY_SESSION_BASE = 2000000;
 const SAME_COMPANY_RULES_PER_TAB = 1000;
 const RESOURCE_TYPES_WITHOUT_MAIN = supportedResourceTypes(['sub_frame', 'stylesheet', 'script', 'image', 'font', 'object', 'xmlhttprequest', 'ping', 'csp_report', 'media', 'websocket', 'webtransport', 'webbundle', 'other']);
@@ -106,7 +120,7 @@ function siteDomainFor(url) {
 
 async function getSettings() {
   const [stored, session] = await Promise.all([
-    chrome.storage.local.get({ blockingEnabled: true, adBlockingEnabled: true, cookiePopupEnabled: true, gpcEnabled: true, dntEnabled: false, pausedSites: {}, globalOff: false, tempOffUntil: 0, tempOffMinutes: 0 }),
+    chrome.storage.local.get({ blockingEnabled: true, adBlockingEnabled: true, cookiePopupEnabled: true, gpcEnabled: true, dntEnabled: false, pausedSites: {}, globalOff: false, tempOffUntil: 0, tempOffMinutes: 0, scriptRules: {}, scriptSiteRules: {} }),
     chrome.storage.session.get({ restartOff: false })
   ]);
   return {
@@ -119,7 +133,9 @@ async function getSettings() {
     globalOff: stored.globalOff === true,
     tempOffUntil: stored.tempOffUntil || 0,
     tempOffMinutes: stored.tempOffMinutes || 0,
-    restartOff: session.restartOff === true
+    restartOff: session.restartOff === true,
+    scriptRules: stored.scriptRules || {},
+    scriptSiteRules: stored.scriptSiteRules || {}
   };
 }
 
@@ -133,12 +149,12 @@ function isProtectionOff(settings, siteDomain) {
 function pauseRuleId(siteDomain) {
   let hash = 0;
   for (const ch of siteDomain) hash = ((hash * 31) + ch.charCodeAt(0)) >>> 0;
-  return PAUSE_RULE_BASE + (hash % 1000000);
+  return PAUSE_RULE_BASE + (hash % PAUSE_RULE_RANGE);
 }
 
 async function applyPauseRules(pausedSites) {
   const existing = await chrome.declarativeNetRequest.getDynamicRules();
-  const removeRuleIds = existing.filter((rule) => rule.id >= PAUSE_RULE_BASE).map((rule) => rule.id);
+  const removeRuleIds = existing.filter((rule) => rule.id >= PAUSE_RULE_BASE && rule.id < PAUSE_RULE_BASE + PAUSE_RULE_RANGE).map((rule) => rule.id);
   const addRules = Object.keys(pausedSites || {}).sort().map((siteDomain) => ({
     id: pauseRuleId(siteDomain),
     priority: 10000,
@@ -164,6 +180,79 @@ async function applyRulesetSettings(settings) {
   else disableRulesetIds.push(DNT_RULESET);
   await chrome.declarativeNetRequest.updateEnabledRulesets({ enableRulesetIds, disableRulesetIds });
   await applyPauseRules(settings.pausedSites);
+}
+
+// A script address can become a rule only if it is a plain http(s) address
+// without the DNR filter characters * ^ |.
+function scriptRuleUrlOk(url) {
+  return typeof url === 'string' && url.length <= 400 && /^https?:\/\/[^\s*^|]+$/.test(url);
+}
+
+function scriptRule(id, siteDomain, url, type) {
+  return {
+    id,
+    priority: SCRIPT_RULE_PRIORITY,
+    action: { type },
+    // '||' matches the host on http and https. Browsers can upgrade an http
+    // script to https (HSTS), so a rule that names the scheme can miss it.
+    condition: { urlFilter: '||' + url.replace(/^https?:\/\//, ''), initiatorDomains: [siteDomain], resourceTypes: ['script'] }
+  };
+}
+
+async function applyScriptRules(settings) {
+  const blockOk = settings.blockingEnabled && !isProtectionOff(settings, null);
+  const scriptRules = [];
+  for (const [siteDomain, urls] of Object.entries(settings.scriptRules || {})) {
+    for (const [url, choice] of Object.entries(urls || {})) {
+      if (!scriptRuleUrlOk(url) || scriptRules.length >= SCRIPT_RULE_MAX) continue;
+      if (choice === 'allow') scriptRules.push(scriptRule(SCRIPT_RULE_BASE + scriptRules.length, siteDomain, url, 'allow'));
+      else if (choice === 'block' && blockOk) scriptRules.push(scriptRule(SCRIPT_RULE_BASE + scriptRules.length, siteDomain, url, 'block'));
+    }
+  }
+  // "Allow all" / "Block all": every script from another website (thirdParty)
+  // that a page of this website loads.
+  const siteRules = [];
+  for (const [siteDomain, choice] of Object.entries(settings.scriptSiteRules || {})) {
+    if (siteRules.length >= SCRIPT_RULE_MAX) break;
+    const type = choice === 'allowAll' ? 'allow' : (choice === 'blockAll' && blockOk ? 'block' : '');
+    if (!type) continue;
+    siteRules.push({
+      id: SCRIPT_SITE_RULE_BASE + siteRules.length,
+      priority: SCRIPT_SITE_RULE_PRIORITY,
+      action: { type },
+      condition: { initiatorDomains: [siteDomain], domainType: 'thirdParty', resourceTypes: ['script'] }
+    });
+  }
+  const inRange = (base) => (rule) => rule.id >= base && rule.id < base + SCRIPT_RULE_MAX;
+  const existing = await chrome.declarativeNetRequest.getDynamicRules();
+  const removeRuleIds = existing.filter((rule) => inRange(SCRIPT_RULE_BASE)(rule) || inRange(SCRIPT_SITE_RULE_BASE)(rule)).map((rule) => rule.id);
+  await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules: scriptRules.concat(siteRules) });
+}
+
+function scriptChoicesForSite(settings, siteDomain) {
+  return siteDomain ? Object.assign({}, (settings.scriptRules || {})[siteDomain] || {}) : {};
+}
+
+async function setScriptChoice(siteDomain, url, choice) {
+  if (!siteDomain || !scriptRuleUrlOk(url) || !SCRIPT_CHOICES.has(choice)) throw new Error('Bad script choice');
+  const stored = await chrome.storage.local.get({ scriptRules: {} });
+  const scriptRules = stored.scriptRules || {};
+  const site = Object.assign({}, scriptRules[siteDomain]);
+  delete site[url];
+  if (choice === 'allow' || choice === 'block') site[url] = choice;
+  if (Object.keys(site).length) scriptRules[siteDomain] = site; else delete scriptRules[siteDomain];
+  await chrome.storage.local.set({ scriptRules });
+  return applySettings();
+}
+
+async function setScriptSiteChoice(siteDomain, choice) {
+  if (!siteDomain || !SCRIPT_SITE_CHOICES.has(choice)) throw new Error('Bad script choice');
+  const stored = await chrome.storage.local.get({ scriptSiteRules: {} });
+  const scriptSiteRules = stored.scriptSiteRules || {};
+  if (choice === 'resetAll') delete scriptSiteRules[siteDomain];
+  else scriptSiteRules[siteDomain] = choice;
+  await chrome.storage.local.set({ scriptSiteRules });
+  return applySettings();
 }
 
 async function applyMainWorldScript(scriptId, scriptFile, enabled) {
@@ -206,6 +295,7 @@ function applySettings() {
   const run = settingsQueue.then(async () => {
     const settings = await getSettings();
     await applyRulesetSettings(settings);
+    await applyScriptRules(settings);
     await applyGpcScript(settings.gpcEnabled);
     await applyDntScript(settings.dntEnabled);
     return settings;
@@ -366,7 +456,9 @@ async function observeResourceUrl(tabId, url, status) {
   if (!state || state.status !== 'ok' || !state.siteDomain) return;
   const requestDomain = psl.registrableDomain(new URL(url).hostname);
   if (requestDomain && requestDomain !== state.siteDomain) {
-    PB.Report.addOutsideScript(state, url, status);
+    const match = disconnect.find(new URL(url).hostname);
+    const meta = match ? { company: match.company || '', category: match.category || '' } : {};
+    PB.Report.addOutsideScript(state, url, status, meta);
     scheduleSave(tabId, state);
   }
   if (status === 'blocked') await observeAdBlocked(tabId, url);
@@ -410,11 +502,12 @@ async function looksLikeAdUrl(url) {
   }
 }
 
-async function observeAdBlocked(tabId, url) {
+async function observeAdBlocked(tabId, url, type) {
   if (tabId < 0 || !url || !isSupportedUrl(url) || !(await looksLikeAdUrl(url))) return;
   const state = await ensureTabState(tabId, null);
   if (!state || state.status !== 'ok') return;
-  PB.Report.addAdBlocked(state, url);
+  const match = disconnect.find(new URL(url).hostname);
+  PB.Report.addAdBlocked(state, url, { type: type || '', company: (match && match.company) || '', category: (match && match.category) || '' });
   scheduleSave(tabId, state);
 }
 
@@ -426,7 +519,7 @@ const BLOCKED_BY_EXTENSION_ERRORS = new Set(['net::ERR_BLOCKED_BY_CLIENT', 'NS_E
 async function observeBlocked(details) {
   if (BLOCKED_BY_EXTENSION_ERRORS.has(details.error)) {
     await observeTrackerUrl(details.tabId, details.url, 'blocked');
-    await observeAdBlocked(details.tabId, details.url);
+    await observeAdBlocked(details.tabId, details.url, details.type);
   }
 }
 
@@ -462,6 +555,8 @@ function applySettingsToSummary(summary, settings) {
     summary.adAllowedCount = summary.adTrackerCount || 0;
     summary.outsideScriptBlockedCount = 0;
     summary.adBlockedRequestCount = 0;
+    summary.adItems = [];
+    summary.outsideScriptItems = (summary.outsideScriptItems || []).map((item) => Object.assign({}, item, { status: 'allowed' }));
     summary.sitePaused = offForSite;
     summary.trackers = (summary.trackers || []).map((tracker) => Object.assign({}, tracker, {
       status: 'Allowed',
@@ -730,6 +825,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       summary = applySettingsToSummary(summary, settings);
       summary.settings = settings;
       summary.sitePaused = Boolean(summary.siteDomain && settings.pausedSites[summary.siteDomain]);
+      summary.scriptChoices = scriptChoicesForSite(settings, summary.siteDomain);
+      summary.scriptSiteChoice = (summary.siteDomain && settings.scriptSiteRules[summary.siteDomain]) || '';
       sendResponse({ ok: true, report: summary });
       return;
     }
@@ -742,6 +839,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (!state || !state.siteDomain) throw new Error('No website report');
       const settings = await setPaused(state.siteDomain, Boolean(message.paused));
       sendResponse({ ok: true, settings });
+      return;
+    }
+    // Only extension pages (the popup) can change script rules. Content scripts
+    // run inside websites, so their sender address is the website and they are refused.
+    if (message && message.type === 'setScriptChoice') {
+      const fromExtensionPage = sender.id === chrome.runtime.id && String(sender.url || '').startsWith(chrome.runtime.getURL(''));
+      if (!fromExtensionPage) throw new Error('Not allowed');
+      const state = await getState(message.tabId);
+      if (!state || !state.siteDomain) throw new Error('No website report');
+      const choice = String(message.choice || '');
+      if (SCRIPT_SITE_CHOICES.has(choice)) {
+        sendResponse({ ok: true, settings: await setScriptSiteChoice(state.siteDomain, choice) });
+        return;
+      }
+      const url = String(message.url || '');
+      const items = (state.outsideScripts && state.outsideScripts.items) || {};
+      if (!items[url]) throw new Error('Script not on this page');
+      sendResponse({ ok: true, settings: await setScriptChoice(state.siteDomain, url, choice) });
       return;
     }
     if (message && message.type === 'setTemporaryOff') {

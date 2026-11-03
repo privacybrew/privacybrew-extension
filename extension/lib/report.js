@@ -106,10 +106,28 @@
   }
 
 
-  function addOutsideScript(state, url, status) {
+  // Details for each outside script (up to SCRIPT_ITEM_LIMIT per page): where it
+  // comes from, if it loaded, and which tracker company owns it, if known.
+  const SCRIPT_ITEM_LIMIT = 100;
+
+  function addOutsideScript(state, url, status, meta) {
     if (!url) return state;
     const key = cleanUrl(url);
     const hash = hashText(key);
+    state.outsideScripts = state.outsideScripts || {};
+    state.outsideScripts.items = state.outsideScripts.items || {};
+    const items = state.outsideScripts.items;
+    if (items[key] || Object.keys(items).length < SCRIPT_ITEM_LIMIT) {
+      const info = meta || {};
+      let host = '';
+      try { host = new URL(key).hostname; } catch (_) {}
+      items[key] = {
+        host,
+        status: status === 'blocked' ? 'blocked' : 'allowed',
+        company: info.company || (items[key] && items[key].company) || '',
+        category: info.category || (items[key] && items[key].category) || ''
+      };
+    }
     state.outsideScripts = state.outsideScripts || { hashes: {}, blockedHashes: {}, samples: [], blockedSamples: [] };
     state.outsideScripts.hashes = state.outsideScripts.hashes || {};
     state.outsideScripts.blockedHashes = state.outsideScripts.blockedHashes || {};
@@ -128,7 +146,9 @@
   }
 
 
-  function addAdBlocked(state, url) {
+  const AD_ITEM_LIMIT = 100;
+
+  function addAdBlocked(state, url, meta) {
     if (!url) return state;
     const key = cleanUrl(url);
     const hash = hashText(key);
@@ -137,6 +157,17 @@
     state.ads.samples = state.ads.samples || {};
     state.ads.blockedHashes[hash] = true;
     if (Object.keys(state.ads.samples).length < SAMPLE_LIMIT) state.ads.samples[hash] = key;
+    // Details for each blocked ad request (up to AD_ITEM_LIMIT per page): where
+    // it goes, the kind of request, and the ad company that owns it, if known.
+    state.ads.items = state.ads.items || {};
+    const items = state.ads.items;
+    if (items[key] || Object.keys(items).length < AD_ITEM_LIMIT) {
+      const info = meta || {};
+      const old = items[key] || {};
+      let host = '';
+      try { host = new URL(key).hostname; } catch (_) {}
+      items[key] = { host, type: old.type || info.type || '', company: old.company || info.company || '', category: old.category || info.category || '' };
+    }
     state.updatedAt = Date.now();
     return state;
   }
@@ -248,9 +279,14 @@
     const outsideScripts = state.outsideScripts || {};
     const outsideScriptUrls = Object.keys(outsideScripts.hashes || outsideScripts.urls || {}).sort();
     const outsideScriptBlockedUrls = Object.keys(outsideScripts.blockedHashes || outsideScripts.blockedUrls || {}).sort();
+    const outsideScriptItems = Object.entries(outsideScripts.items || {}).map(([url, item]) => Object.assign({ url }, item))
+      .sort((a, b) => (a.status === b.status ? 0 : (a.status === 'blocked' ? -1 : 1)) || a.host.localeCompare(b.host) || a.url.localeCompare(b.url));
     const ads = state.ads || {};
     const adBlockedRequestCount = Object.keys(ads.blockedHashes || {}).length;
     const adCosmeticMaxMs = Math.max(0, ...(ads.cosmeticMs || [0]));
+    const adItems = Object.entries(ads.items || {}).map(([url, item]) => Object.assign({ url }, item))
+      .sort((a, b) => a.host.localeCompare(b.host) || a.url.localeCompare(b.url));
+    const adHidCount = (ads.cosmeticMs || []).length;
     const fingerprints = Object.entries(state.fingerprints || {}).map(([technique, origins]) => ({
       technique,
       label: FINGERPRINT_LABELS[technique] || technique,
@@ -272,8 +308,11 @@
       adAllowedCount,
       outsideScriptCount: outsideScriptUrls.length,
       outsideScriptBlockedCount: outsideScriptBlockedUrls.length,
+      outsideScriptItems,
       adBlockedRequestCount,
       adCosmeticMaxMs,
+      adItems,
+      adHidCount,
       cookiePopup: state.cookiePopup || { status: 'none', label: 'No pop-up found' },
       adWall: state.adWall || 'none',
       trackers,

@@ -10,10 +10,10 @@ PrivacyBrew observes (does not modify) the network requests of the page the user
 Used to know when the main page of a tab changes, so the report card starts fresh for each new page and is not reset by same-page address changes. No browsing history is stored or sent.
 
 ## storage
-Used to keep the user's settings (for example blocking on or off, and the websites where the user turned PrivacyBrew off) in chrome.storage.local, and the report for each open tab in chrome.storage.session, which Chrome clears when the browser closes. No data leaves the browser.
+Used to keep the user's settings (for example blocking on or off, and the websites where the user turned PrivacyBrew off) in chrome.storage.local, and the report for each open tab in chrome.storage.session, which Chrome clears when the browser closes. If the user allows or blocks one outside script on a website, the website name and the script address (no query string) are kept in chrome.storage.local until the user selects Undo. If the user selects "Block all" or "Allow all" for outside scripts, the website name and that choice are kept the same way. No data leaves the browser.
 
 ## declarativeNetRequest
-Used to block known tracker and ad requests with static rule lists that ship inside the extension (Disconnect tracker list, EasyList). Also used to add the "Sec-GPC: 1" and optional "DNT: 1" privacy request headers when the user turns them on, and to allow all requests on websites where the user paused PrivacyBrew. Chrome applies the rules; the extension does not read page content to do this.
+Used to block known tracker and ad requests with static rule lists that ship inside the extension (Disconnect tracker list, EasyList). Also used to add the "Sec-GPC: 1" and optional "DNT: 1" privacy request headers when the user turns them on, and to allow all requests on websites where the user paused PrivacyBrew. When the user allows or blocks one outside script, or all outside scripts, on a website, it adds one rule for that choice on that website. Chrome applies the rules; the extension does not read page content to do this.
 
 ## scripting
 Used to register small scripts that ship with the extension: they set navigator.globalPrivacyControl and navigator.doNotTrack when the user turns those requests on, and they run the bundled DuckDuckGo autoconsent rules to answer cookie pop-ups with "reject". Autoconsent can only run a fixed list of code snippets bundled in the package; any other code is refused. No remote code is loaded.

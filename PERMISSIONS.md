@@ -12,11 +12,11 @@ PrivacyBrew resets the report when the top-level page changes. This keeps each t
 
 ## `storage`
 
-PrivacyBrew stores per-tab reports in `chrome.storage.session`. It stores blocking and GPC settings in `chrome.storage.local`. Data stays local to the browser.
+PrivacyBrew stores per-tab reports in `chrome.storage.session`. It stores blocking and GPC settings in `chrome.storage.local`. When you allow or block one outside script, it stores the website and the script address in `chrome.storage.local`. When you select "Block all" or "Allow all" for outside scripts, it stores the website name and that choice. Data stays local to the browser.
 
 ## `declarativeNetRequest`
 
-PrivacyBrew blocks known tracker and ad requests with static rules. It also sends the `Sec-GPC: 1` header when GPC is on and `DNT: 1` when DNT is on. PrivacyBrew counts blocked ads with `webRequest.onErrorOccurred` and a local EasyList index, so it does not need `declarativeNetRequestFeedback`.
+PrivacyBrew blocks known tracker and ad requests with static rules. When you allow or block one outside script on a website, it adds one dynamic rule for that script on that website. "Block all" or "Allow all" adds one dynamic rule for all outside scripts on that website. It also sends the `Sec-GPC: 1` header when GPC is on and `DNT: 1` when DNT is on. PrivacyBrew counts blocked ads with `webRequest.onErrorOccurred` and a local EasyList index, so it does not need `declarativeNetRequestFeedback`.
 
 ## `scripting`
 

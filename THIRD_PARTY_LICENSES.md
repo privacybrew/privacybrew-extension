@@ -42,3 +42,19 @@ EasyList data stays in generated files under its own license.
 - Use: Vendored unmodified content script and compact rules in `extension/vendor/autoconsent/`.
 
 Autoconsent files stay under MPL-2.0. PrivacyBrew glue code stays under GPLv3.
+
+## Fraunces font
+
+- Project: https://github.com/undercasetype/Fraunces
+- License: SIL Open Font License 1.1 (`extension/fonts/OFL-fraunces.txt`)
+- Use: Headline font in the popup, bundled as `extension/fonts/fraunces.woff2` (Latin subset).
+
+## IBM Plex Sans and IBM Plex Mono fonts
+
+- Project: https://github.com/IBM/plex
+- License: SIL Open Font License 1.1 (`extension/fonts/OFL-ibmplexsans.txt`, `extension/fonts/OFL-ibmplexmono.txt`)
+- Use: Body and number fonts in the popup, bundled as `extension/fonts/plexsans.woff2` and `extension/fonts/plexmono-500.woff2` (Latin subsets).
+
+The fonts are bundled with the extension, so the popup does not load anything from the web.
+
+The store image tool (`tools/store_screenshots.py`) uses TTF copies of Fraunces Bold and IBM Plex Sans in `tools/fonts/`, under the same license. They are not part of the extension package.
