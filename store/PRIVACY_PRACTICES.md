@@ -1,10 +1,10 @@
 # Chrome Web Store: Privacy practices tab (paste-ready)
 
 ## Single purpose
-PrivacyBrew shows a plain-language privacy report card for the website the user is on, and protects the user on that website: it blocks known trackers and ads, answers cookie pop-ups with "reject", and can ask websites not to sell the user's data. All of this runs locally in the browser. Nothing is sent to PrivacyBrew.
+PrivacyBrew shows a plain-language privacy report card for the website the user is on, and protects the user on that website: it blocks known trackers and ads, lets the user block or allow outside scripts, answers cookie pop-ups with "reject", and can ask websites not to sell the user's data. All of this runs locally in the browser. Nothing is sent to PrivacyBrew.
 
 ## webRequest
-PrivacyBrew observes (does not modify) the network requests of the page the user opens. It needs this to count known trackers, outside scripts and third-party cookies for the report card, and to see which requests Chrome blocked (net::ERR_BLOCKED_BY_CLIENT). The results stay in the browser and are cleared when the user leaves the page. Only website names and paths are kept; query strings and tracking IDs are never stored.
+PrivacyBrew observes (does not modify) the network requests of the page the user opens. It needs this to count known trackers, ad requests, outside scripts and third-party cookies for the report card, and to see which requests Chrome blocked (net::ERR_BLOCKED_BY_CLIENT). The results stay in the browser and are cleared when the user leaves the page. Only website names and paths are kept; query strings and tracking IDs are never stored.
 
 ## webNavigation
 Used to know when the main page of a tab changes, so the report card starts fresh for each new page and is not reset by same-page address changes. No browsing history is stored or sent.
