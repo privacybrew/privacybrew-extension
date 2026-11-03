@@ -65,3 +65,5 @@ No account or login is needed.
   "how it works" flow in Trackers and Ads, calm motion (none with reduced motion). Same
   permissions and file list as 1.0.2.
   ZIP SHA-256: aee5625b0d770176aa565c3892c1c3881852be751715c50dcbf6835cb64eb243
+- 2026-11-03: Version 1.0.4 prepared. Script and ad details, Block all / Allow all and per-script
+  Block / Allow, bundled fonts, flat panels. ZIP SHA-256: fa94991ed2143dbb0b7d09b72488e17e52e5548f7bbb92a56ddf2bead51b9449
