@@ -82,3 +82,4 @@ No account or login is needed.
   (new `cookies` permission, no install warning; privacy tab needs the cookies justification from
   PRIVACY_PRACTICES.md), clearer notices. Source commit 4727e77.
   ZIP SHA-256: b25b14057801d1be1dbfda166d08cc07037a5acb192c534913a60b05c29790ae
+- 2026-11-11: Version 1.0.5 published (store page shows 1.0.5, updated 2026-11-11).

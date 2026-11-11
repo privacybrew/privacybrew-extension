@@ -102,3 +102,4 @@ The Firefox build also declares `gecko_android` with `strict_min_version` 142.0.
   ZIP SHA-256: e32322c40aa3264549fbbe1784dc2decd7aafb3113bb3f0d225473c1df2a65b0
 - 2026-11-11: Version 1.0.5 prepared (same changes as Chrome 1.0.5). Source commit 4727e77.
   ZIP SHA-256: bcec3f47d16a08a675e7205e6a3796689b2eabb9cecf9832f6a2125ec68bc394
+- 2026-11-11: Version 1.0.5 published (store page shows 1.0.5, updated 2026-11-11).
