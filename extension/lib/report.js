@@ -207,13 +207,26 @@
   }
 
   function addUnknown(state, domain) {
-    if (domain) state.unknownDomains[domain] = true;
+    state.unknownDomains = state.unknownDomains || {};
+    addCapped(state.unknownDomains, domain, DOMAIN_LIST_LIMIT);
     state.updatedAt = Date.now();
     return state;
   }
 
+  // Limits for per-page lists that a website can grow (threat model T5): a page
+  // can send many fake fingerprint events or load many hosts. Same idea as the
+  // 100-item limits for scripts and ads.
+  const FINGERPRINT_ORIGIN_LIMIT = 50;
+  const DOMAIN_LIST_LIMIT = 200;
+
+  function addCapped(map, key, limit) {
+    if (!key || map[key]) return;
+    if (Object.keys(map).length < limit) map[key] = true;
+  }
+
   function addCookie(state, domain) {
-    if (domain) state.cookieDomains[domain] = true;
+    state.cookieDomains = state.cookieDomains || {};
+    addCapped(state.cookieDomains, domain, DOMAIN_LIST_LIMIT);
     state.updatedAt = Date.now();
     return state;
   }
@@ -221,7 +234,7 @@
   function addFingerprint(state, technique, origin) {
     if (!FINGERPRINT_LABELS[technique]) return state;
     if (!state.fingerprints[technique]) state.fingerprints[technique] = {};
-    state.fingerprints[technique][origin || 'Unknown script'] = true;
+    addCapped(state.fingerprints[technique], String(origin || 'Unknown script').slice(0, 200), FINGERPRINT_ORIGIN_LIMIT);
     state.updatedAt = Date.now();
     return state;
   }

@@ -34,7 +34,7 @@ def launch():
     sw=None
     for _ in range(50):
         for t in cdp.call('Target.getTargets')['targetInfos']:
-            if t.get('url','').endswith('/background.js'):
+            if t.get('url','') == f'chrome-extension://{ext}/background.js':
                 sw=cdp.call('Target.attachToTarget', {'targetId':t['targetId'], 'flatten':True})['sessionId']; cdp.call('Runtime.enable', sessionId=sw); break
         if sw: break
         time.sleep(.2)
@@ -115,6 +115,9 @@ if __name__=='__main__':
         open_popup(cdp,ext,sw,'pb-ext-detail-scripts.png', "document.querySelector('[data-detail=scripts]').click()", expect="document.querySelectorAll('.script-row').length===3||`rows=${document.querySelectorAll('.script-row').length}`")
         open_popup(cdp,ext,sw,'pb-ext-detail-scripts-choice.png', "document.querySelector('[data-detail=scripts]').click(); setTimeout(()=>document.querySelector('.script-row .script-action').click(),200)", expect="Boolean(document.querySelector('.script-notice'))&&document.body.textContent.includes('You allowed this script.')||'no notice'", settle=1.5)
         open_popup(cdp,ext,sw,'pb-ext-detail-scripts-block-all.png', "document.querySelector('[data-detail=scripts]').click(); setTimeout(()=>document.querySelector('.script-all .script-action').click(),200)", expect="document.body.textContent.includes('You blocked all outside scripts on this website.')||'no block-all note'", settle=1.5)
+        open_popup(cdp,ext,sw,'pb-ext-detail-cookies.png', "document.querySelector('[data-detail=cookies]').click()", expect="document.body.textContent.includes('Third-party cookies on this page')||'no cookie list'")
+        open_popup(cdp,ext,sw,'pb-ext-cookie-menu.png', "document.querySelector('#clearCookiesButton').click()", expect="!document.querySelector('#cookieMenu').hidden||'menu closed'")
+        open_popup(cdp,ext,sw,'pb-ext-cookie-menu-confirm.png', "document.querySelector('#clearCookiesButton').click(); setTimeout(()=>document.querySelector('#clearSiteCookies').click(),150)", expect="!document.querySelector('#cookieConfirm').hidden||'no confirm'", settle=1.0)
         open_popup(cdp,ext,sw,'pb-ext-detail-trackers.png', "document.querySelector('[data-detail=trackers]').click(); setTimeout(()=>{const d=document.querySelector('details'); if(d)d.open=true},50)")
         open_popup(cdp,ext,sw,'pb-ext-detail-trackers-reduced-motion.png', "document.querySelector('[data-detail=trackers]').click()", expect="document.getAnimations().length===0||`animations=${document.getAnimations().length}`", reduced=True)
         open_popup(cdp,ext,sw,'pb-ext-settings.png', "document.querySelector('#settingsButton').click()")

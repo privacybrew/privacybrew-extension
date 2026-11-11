@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import io, json, re, sys, tarfile, urllib.request
+import base64, hashlib, io, json, re, sys, tarfile, urllib.request
 from datetime import date, timezone, datetime
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
@@ -13,6 +13,12 @@ EASYLIST_URL = 'https://easylist.to/easylist/easylist.txt'
 ANTIADBLOCK_URL = 'https://easylist-downloads.adblockplus.org/antiadblockfilters.txt'
 AUTOCONSENT_VERSION = '16.50.0'
 AUTOCONSENT_URL = f'https://registry.npmjs.org/@duckduckgo/autoconsent/-/autoconsent-{AUTOCONSENT_VERSION}.tgz'
+# npm's published dist.integrity for this exact version (threat model T2). The
+# autoconsent bundle runs on every website, so the build refuses any tarball
+# that does not match. When you change AUTOCONSENT_VERSION, take the new value
+# from https://registry.npmjs.org/@duckduckgo/autoconsent/<version> (dist.integrity)
+# and review the upstream changes before release.
+AUTOCONSENT_INTEGRITY = 'sha512-eMuITy8uQfFH+ikU6uWGDatMlbuPbHuCV3emmpglo7I2IzCANlIYaYTm2/nP5njWnVSNAR7I3kezjHj5+8DZvA=='
 GPL_URL = 'https://www.gnu.org/licenses/gpl-3.0.txt'
 
 CATEGORY_MAP = {
@@ -49,6 +55,12 @@ def fetch(url):
     req = urllib.request.Request(url, headers={'User-Agent': 'PrivacyBrew data builder'})
     with urllib.request.urlopen(req, timeout=60) as r:
         return r.read()
+
+def check_integrity(raw, expected, label):
+    algo, _, want = expected.partition('-')
+    got = base64.b64encode(hashlib.new(algo, raw).digest()).decode()
+    if got != want:
+        raise SystemExit(f'{label}: integrity check failed. Expected {expected}, got {algo}-{got}. Do not ship this download.')
 
 def normalize_domain(value):
     value = value.strip().lower().rstrip('.')
@@ -572,6 +584,7 @@ def main():
     easylist_raw = fetch(EASYLIST_URL).decode('utf-8', errors='replace')
     antiadblock_raw = fetch(ANTIADBLOCK_URL).decode('utf-8', errors='replace')
     autoconsent_raw = fetch(AUTOCONSENT_URL)
+    check_integrity(autoconsent_raw, AUTOCONSENT_INTEGRITY, f'autoconsent {AUTOCONSENT_VERSION}')
     disconnect_data = parse_disconnect(services_raw)
     psl_data = parse_psl(psl_raw)
     (DATA / 'disconnect.json').write_text(json.dumps(disconnect_data, separators=(',', ':'), ensure_ascii=False), encoding='utf-8')

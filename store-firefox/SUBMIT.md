@@ -20,6 +20,17 @@
 
 4. Check that the commit in `store-firefox/SOURCE.md` builds the same files as the ZIP you upload. If the extension code changed after it, update the commit.
 
+## Before every release: review third-party data (threat model T2)
+
+If `tools/build_data.py` ran since the last release, check what changed before you package:
+
+```sh
+git diff --stat -- extension/vendor extension/data extension/rules
+```
+
+- `extension/vendor/autoconsent/` must change only when `AUTOCONSENT_VERSION` changed. The build checks the npm checksum; read the upstream release notes for a new version.
+- `extension/data/` and `extension/rules/` are lists (JSON). Large or unexpected changes (for example a big drop in rule count, or new allow rules for well-known trackers) need a look before release.
+
 ## Submit
 
 1. Sign in at https://addons.mozilla.org/developers/ with a Firefox account. Use privacybrew@protonmail.com. Turn on two-step authentication if AMO asks for it.

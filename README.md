@@ -100,7 +100,7 @@ Tiny canvases under 16 by 16 pixels are ignored. Small icons and layout checks c
 
 ## Limits
 
-PrivacyBrew blocks known trackers only. It can miss new companies, hidden redirects, or tracking that does not use the watched APIs. Some websites can break. Turn off blocking for that website if this happens. PrivacyBrew does not clear cookies or stop fingerprinting yet.
+PrivacyBrew blocks known trackers only. It can miss new companies, hidden redirects, or tracking that does not use the watched APIs. Some websites can break. Turn off blocking for that website if this happens. PrivacyBrew shows fingerprinting but does not stop it yet.
 
 ## Future work
 

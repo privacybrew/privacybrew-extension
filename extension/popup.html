@@ -12,6 +12,7 @@
       <button id="backButton" class="icon-button" type="button" aria-label="Back" title="Back" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.8l5.6-5.6L12 4 4 12l8 8 1.4-1.4L7.8 13H20v-2Z"/></svg></button>
       <img src="icons/icon-32.png" width="28" height="28" alt="">
       <div class="title-group"><strong>PrivacyBrew</strong></div>
+      <button id="clearCookiesButton" class="icon-button" type="button" aria-label="Clear cookies" title="Clear cookies" aria-expanded="false" aria-controls="cookieMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M15.573 3.739A9 9 0 1 0 20.261 8.427 4 4 0 0 1 15.573 3.739ZM7 8.5a1.6 1.6 0 1 0 3.2 0 1.6 1.6 0 1 0-3.2 0Zm5.4 4a1.6 1.6 0 1 0 3.2 0 1.6 1.6 0 1 0-3.2 0Zm-4.7 3a1.3 1.3 0 1 0 2.6 0 1.3 1.3 0 1 0-2.6 0Z"/></svg></button>
       <button id="settingsButton" class="icon-button" type="button" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13.5c.1-.5.1-1 .1-1.5s0-1-.1-1.5l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.6-1.5L14 2h-4l-.4 2.5A8 8 0 0 0 7 6L4.6 5l-2 3.5 2 1.5a9 9 0 0 0 0 3l-2 1.5 2 3.5 2.4-1a8 8 0 0 0 2.6 1.5L10 22h4l.4-2.5a8 8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/></svg></button>
       <button id="powerButton" class="icon-button" type="button" aria-label="Turn off menu" title="Turn off menu" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3h-2v10h2V3Zm4.8 2.8-1.4 1.4A7 7 0 1 1 7.6 7.2L6.2 5.8a9 9 0 1 0 11.6 0Z"/></svg></button>
     </header>
@@ -25,9 +26,16 @@
       </div>
       <button id="globalOffButton" type="button">Turn off until I turn it on</button>
     </div>
+    <div id="cookieMenu" class="menu cookie-menu" hidden>
+      <button id="clearTrackerCookies" type="button">Clear third-party cookies<span id="clearTrackerSub" class="menu-sub">From the websites on this page. You stay signed in.</span></button>
+      <button id="clearSiteCookies" type="button">Clear cookies of this website<span class="menu-sub">This signs you out.</span></button>
+      <div id="cookieConfirm" class="menu-confirm" hidden><p id="cookieConfirmText"></p><button id="cookieConfirmYes" type="button">Clear and sign out</button><button id="cookieConfirmNo" type="button">Cancel</button></div>
+      <p id="cookieMenuResult" class="menu-result" role="status" hidden></p>
+    </div>
     <section id="statusBar" class="status-bar" hidden><span id="statusText"></span><button id="statusTurnOn" type="button">Turn on</button></section>
     <section id="reloadBanner" class="wall-banner" hidden><span>Reload this page to see its full report.</span><button id="reloadPage" type="button">Reload page</button></section>
-    <section id="accessBanner" class="wall-banner" hidden><span id="accessText">PrivacyBrew needs access to websites to protect you.</span><button id="accessAllow" type="button">Allow access</button></section>
+    <section id="accessBanner" class="wall-banner" hidden><span id="accessText">PrivacyBrew needs access to websites to see and block trackers. Nothing leaves your browser.</span><button id="accessAllow" type="button">Allow access</button></section>
+    <section id="noticeBanner" class="wall-banner notice-banner" role="status" hidden><span id="noticeText"></span></section>
     <section id="wallBanner" class="wall-banner" hidden><span id="wallText"></span><button id="wallPause" type="button">Pause on this website</button></section>
 
     <section id="homeView" class="view">
@@ -39,7 +47,9 @@
         <button class="home-card" data-detail="cookies"><span class="group-label">Cookies</span><span class="big"><span id="homeCookiesValue" class="big-number text-value">None</span></span><span id="homeCookiesSub" class="subline">0 third-party cookie websites</span></button>
         <button class="home-card wide" data-detail="fingerprinting"><span class="group-label">Fingerprinting</span><span class="big"><span class="num"><span id="homeFingerprintNumber" class="big-number text-value">None</span><span class="big-number text-value count-ghost" aria-hidden="true"></span></span><span id="homeFingerprintWord" class="big-word"></span></span><span class="subline">on this page</span></button>
       </div>
-      <button id="privacyRequestsRow" class="privacy-row" type="button">GPC sent · DNT off</button>
+      <div class="home-row">
+        <button id="privacyRequestsRow" class="privacy-row" type="button">GPC sent · DNT off</button>
+      </div>
       <footer class="home-footer"><a href="https://privacybrew.app/extension.html" target="_blank" rel="noreferrer">privacybrew.app</a><span>·</span><button id="feedbackButton" type="button">Feedback</button></footer>
     </section>
 

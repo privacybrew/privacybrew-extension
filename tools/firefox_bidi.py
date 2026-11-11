@@ -23,7 +23,10 @@ GRAPHICS_PREFS = {
     'gfx.canvas.accelerated': False,
     'webgl.force-enabled': False,
 }
-SAFE_ENV = {'MOZ_HEADLESS': '1', 'LIBGL_ALWAYS_SOFTWARE': '1', 'MOZ_WEBRENDER': '0'}
+# Firefox 159 refuses chrome-scope BiDi commands (used to open the add-on
+# popup) unless this is set. It applies only to the temporary test profile,
+# and the remote agent listens on 127.0.0.1 only.
+SAFE_ENV = {'MOZ_HEADLESS': '1', 'LIBGL_ALWAYS_SOFTWARE': '1', 'MOZ_WEBRENDER': '0', 'MOZ_REMOTE_ALLOW_SYSTEM_ACCESS': '1'}
 
 
 def base_prefs(hosts):

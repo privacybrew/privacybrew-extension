@@ -96,7 +96,7 @@ def launch(name, extension=False):
     worker_sessions = []
     if extension:
         ext_id = cdp.call('Extensions.loadUnpacked', {'path': str(EXT)})['id']
-        ext_id, sw_target = find_extension(cdp)
+        ext_id, sw_target = find_extension(cdp, ext_id)
         sw_session = attach(cdp, sw_target)
         worker_sessions.append(sw_session)
         cdp.call('Runtime.enable', sessionId=sw_session)
@@ -105,11 +105,11 @@ def launch(name, extension=False):
 def attach(cdp, target_id):
     return cdp.call('Target.attachToTarget', {'targetId': target_id, 'flatten': True})['sessionId']
 
-def find_extension(cdp, timeout=10):
+def find_extension(cdp, ext_id, timeout=10):
     deadline = time.time() + timeout
     while time.time() < deadline:
         for t in cdp.call('Target.getTargets')['targetInfos']:
-            if t.get('type') == 'service_worker' and t.get('url','').endswith('/background.js'):
+            if t.get('type') == 'service_worker' and t.get('url','') == f'chrome-extension://{ext_id}/background.js':
                 return t['url'].split('/')[2], t['targetId']
         time.sleep(0.2)
     raise RuntimeError('extension worker not found')

@@ -1,5 +1,16 @@
 # Chrome Web Store submit checklist
 
+## Before every release: review third-party data (threat model T2)
+
+If `tools/build_data.py` ran since the last release, check what changed before you package:
+
+```sh
+git diff --stat -- extension/vendor extension/data extension/rules
+```
+
+- `extension/vendor/autoconsent/` must change only when `AUTOCONSENT_VERSION` changed. The build checks the npm checksum; read the upstream release notes for a new version.
+- `extension/data/` and `extension/rules/` are lists (JSON). Large or unexpected changes (for example a big drop in rule count, or new allow rules for well-known trackers) need a look before release.
+
 1. Run `python3 tools/package.py`.
 2. Upload `dist/privacybrew-extension-1.0.0.zip`.
 3. Paste the listing text from `store/LISTING.md`.

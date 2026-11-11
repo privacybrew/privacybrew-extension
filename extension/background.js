@@ -255,6 +255,66 @@ async function setScriptSiteChoice(siteDomain, choice) {
   return applySettings();
 }
 
+// Clear cookies (popup, Cookies details). The cookies permission shows no
+// install warning in Chrome or Firefox; browsingData would warn in Firefox.
+// Partitioned cookies: Firefox (Total Cookie Protection) needs partitionKey {}
+// and firstPartyDomain null to list every partition. Chrome lists partitioned
+// (CHIPS) cookies only for a named top-level site, so it asks for the
+// unpartitioned cookies and the ones partitioned under this website.
+const IS_FIREFOX = chrome.runtime.getURL('').startsWith('moz-extension://');
+
+function cookieDomainMatches(cookieDomain, domain) {
+  const host = String(cookieDomain || '').replace(/^\./, '').toLowerCase();
+  return host === domain || host.endsWith('.' + domain);
+}
+
+async function cookiesForDomain(domain, siteDomain) {
+  const found = new Map();
+  const add = (list) => {
+    for (const c of list || []) {
+      if (!cookieDomainMatches(c.domain, domain)) continue;
+      found.set([c.storeId, c.domain, c.path, c.name, JSON.stringify(c.partitionKey || null), c.firstPartyDomain || ''].join('|'), c);
+    }
+  };
+  if (IS_FIREFOX) {
+    add(await chrome.cookies.getAll({ domain, partitionKey: {}, firstPartyDomain: null }));
+  } else {
+    add(await chrome.cookies.getAll({ domain }));
+    if (siteDomain) {
+      try {
+        add(await chrome.cookies.getAll({ domain, partitionKey: { topLevelSite: 'https://' + siteDomain } }));
+      } catch (_) {}
+    }
+  }
+  return Array.from(found.values());
+}
+
+async function removeCookie(c) {
+  const url = (c.secure ? 'https://' : 'http://') + String(c.domain || '').replace(/^\./, '') + (c.path || '/');
+  const details = { url, name: c.name, storeId: c.storeId };
+  if (c.partitionKey) details.partitionKey = c.partitionKey;
+  if (IS_FIREFOX && c.firstPartyDomain !== undefined) details.firstPartyDomain = c.firstPartyDomain;
+  try {
+    return Boolean(await chrome.cookies.remove(details));
+  } catch (_) {
+    return false;
+  }
+}
+
+// Removes the cookies of each domain (and its subdomains). Returns counts only:
+// cookie names and values are never stored or sent anywhere.
+async function clearCookies(domains, siteDomain) {
+  let removed = 0;
+  let failed = 0;
+  for (const domain of new Set(domains.filter(Boolean))) {
+    for (const c of await cookiesForDomain(domain, siteDomain)) {
+      if (await removeCookie(c)) removed += 1;
+      else failed += 1;
+    }
+  }
+  return { removed, failed };
+}
+
 async function applyMainWorldScript(scriptId, scriptFile, enabled) {
   const registered = await chrome.scripting.getRegisteredContentScripts({ ids: [scriptId] });
   const isRegistered = registered.length > 0;
@@ -381,7 +441,7 @@ async function updateBadge(tabId, state) {
   const summary = PB.Report.summarize(state || {});
   const settings = await getSettings();
   const off = isProtectionOff(settings, summary.siteDomain);
-  await chrome.action.setBadgeBackgroundColor({ tabId, color: off ? '#9585ad' : '#9b6dd1' });
+  await chrome.action.setBadgeBackgroundColor({ tabId, color: off ? '#8a7aa6' : '#8a55d4' });
   await chrome.action.setBadgeText({ tabId, text: off ? 'off' : (summary.blockedCompanyCount ? String(summary.blockedCompanyCount) : '') });
 }
 
@@ -827,6 +887,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       summary.sitePaused = Boolean(summary.siteDomain && settings.pausedSites[summary.siteDomain]);
       summary.scriptChoices = scriptChoicesForSite(settings, summary.siteDomain);
       summary.scriptSiteChoice = (summary.siteDomain && settings.scriptSiteRules[summary.siteDomain]) || '';
+      summary.cookieOwners = {};
+      for (const host of summary.cookieDomains || []) {
+        const match = disconnect && disconnect.find(host);
+        if (match && match.company) summary.cookieOwners[host] = match.company;
+      }
       sendResponse({ ok: true, report: summary });
       return;
     }
@@ -835,6 +900,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return;
     }
     if (message && message.type === 'setSitePaused') {
+      // Settings can turn a listed website on again by name. Only extension
+      // pages may do this, and only for a website that is on the list.
+      if (message.site && !message.paused) {
+        const fromExtensionPage = sender.id === chrome.runtime.id && String(sender.url || '').startsWith(chrome.runtime.getURL(''));
+        const settings = await getSettings();
+        if (!fromExtensionPage || !(settings.pausedSites || {})[message.site]) throw new Error('Not allowed');
+        sendResponse({ ok: true, settings: await setPaused(message.site, false) });
+        return;
+      }
       const state = await getState(message.tabId);
       if (!state || !state.siteDomain) throw new Error('No website report');
       const settings = await setPaused(state.siteDomain, Boolean(message.paused));
@@ -857,6 +931,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const items = (state.outsideScripts && state.outsideScripts.items) || {};
       if (!items[url]) throw new Error('Script not on this page');
       sendResponse({ ok: true, settings: await setScriptChoice(state.siteDomain, url, choice) });
+      return;
+    }
+    // Clear cookies: only from extension pages (the popup), like script choices.
+    if (message && message.type === 'clearCookies') {
+      const fromExtensionPage = sender.id === chrome.runtime.id && String(sender.url || '').startsWith(chrome.runtime.getURL(''));
+      if (!fromExtensionPage) throw new Error('Not allowed');
+      const state = await getState(message.tabId);
+      if (!state || !state.siteDomain) throw new Error('No website report');
+      let domains;
+      if (message.scope === 'site') {
+        domains = [state.siteDomain];
+      } else if (message.scope === 'thirdParty') {
+        // Clear by registrable domain, so cookies on other subdomains of the same tracker go too.
+        domains = Object.keys(state.cookieDomains || {}).map((host) => psl.registrableDomain(host)).filter((d) => d && d !== state.siteDomain);
+      } else {
+        throw new Error('Bad scope');
+      }
+      sendResponse(Object.assign({ ok: true }, await clearCookies(domains, state.siteDomain)));
       return;
     }
     if (message && message.type === 'setTemporaryOff') {

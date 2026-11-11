@@ -14,7 +14,7 @@ HEADLESS = '--headed' not in __import__('sys').argv
 if not HEADLESS and not (__import__('os').environ.get('DISPLAY') or __import__('os').environ.get('WAYLAND_DISPLAY')):
     raise SystemExit('--headed needs DISPLAY or WAYLAND_DISPLAY')
 HOSTS = ['news.example', 'shop.example', 'www.google-analytics.com', 'static.doubleclick.net', 'connect.facebook.net', 'bat.bing.com', 'googleads.g.doubleclick.net']
-BG = '#120a1a'; PANEL = '#1f1329'; BORDER = '#3a2c4a'; ACC = '#9b6dd1'; GREEN = '#5fae96'; TEXT = '#f0eaf7'; DIM = '#b8a8c9'
+BG = '#1c0d36'; PANEL = '#2a1550'; BORDER = '#3f2470'; ACC = '#b98af2'; GREEN = '#8dbfa0'; TEXT = '#f7f1ff'; DIM = '#cdbce8'
 # Brand fonts for store images (SIL OFL 1.1, see tools/fonts/OFL-*.txt). Build-time only.
 FONTS = ROOT / 'tools' / 'fonts'
 FONT_BIG = ImageFont.truetype(str(FONTS / 'Fraunces-Bold.ttf'), 56)
@@ -70,7 +70,7 @@ def launch():
     sw=None
     for _ in range(50):
         for t in cdp.call('Target.getTargets')['targetInfos']:
-            if t.get('url','').endswith('/background.js'):
+            if t.get('url','') == f'chrome-extension://{ext}/background.js':
                 sw=cdp.call('Target.attachToTarget', {'targetId':t['targetId'], 'flatten':True})['sessionId']; cdp.call('Runtime.enable', sessionId=sw); break
         if sw: break
         time.sleep(.2)

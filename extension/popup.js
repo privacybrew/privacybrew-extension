@@ -110,6 +110,52 @@
     document.querySelector('.app').classList.toggle('returning', name === 'home' && currentView !== 'home');
     currentView = name;
     closePowerMenu();
+    closeCookieMenu();
+  }
+
+  // Clear cookies menu, opened from the cookie button in the header. Clearing
+  // this website's cookies signs the user out, so it asks first.
+  function closeCookieMenu() {
+    $('cookieMenu').hidden = true;
+    $('clearCookiesButton').setAttribute('aria-expanded', 'false');
+  }
+
+  function renderCookieMenu() {
+    const report = currentReport || {};
+    const site = report.siteDomain || '';
+    const hosts = report.cookieDomains || [];
+    const usable = Boolean(site) && report.status === 'ok';
+    $('clearSiteCookies').textContent = '';
+    $('clearSiteCookies').append(site ? `Clear cookies of ${site}` : 'Clear cookies of this website', make('span', 'This signs you out.', 'menu-sub'));
+    text($('clearTrackerSub'), hosts.length
+      ? `From the ${hosts.length} ${plural(hosts.length, 'website')} on this page. You stay signed in.`
+      : 'No third-party cookies found on this page.');
+    $('clearTrackerCookies').disabled = !usable || !hosts.length;
+    $('clearSiteCookies').disabled = !usable;
+    $('cookieConfirm').hidden = true;
+  }
+
+  function toggleCookieMenu() {
+    const menu = $('cookieMenu');
+    const opening = menu.hidden;
+    closePowerMenu();
+    if (opening) {
+      renderCookieMenu();
+      $('cookieMenuResult').hidden = true;
+    }
+    menu.hidden = !opening;
+    $('clearCookiesButton').setAttribute('aria-expanded', opening ? 'true' : 'false');
+  }
+
+  async function runClearCookies(scope) {
+    const response = await chrome.runtime.sendMessage({ type: 'clearCookies', tabId: currentTabId, scope }).catch(() => null);
+    let message;
+    if (!response || !response.ok) message = 'PrivacyBrew could not clear the cookies. Reload the page and try again.';
+    else if (!response.removed && !response.failed) message = 'There were no cookies to remove.';
+    else message = `Removed ${response.removed} ${plural(response.removed, 'cookie')}.` + (response.failed ? ` ${response.failed} could not be removed.` : '') + ' Reload the page to see the result.';
+    $('cookieConfirm').hidden = true;
+    text($('cookieMenuResult'), message);
+    $('cookieMenuResult').hidden = false;
   }
 
   function closePowerMenu() {
@@ -124,6 +170,7 @@
   }
 
   function togglePowerMenu() {
+    closeCookieMenu();
     const menu = $('powerMenu');
     menu.hidden = !menu.hidden;
     $('powerButton').setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
@@ -150,6 +197,21 @@
   function protectionOff(report) {
     const settings = report.settings || {};
     return Boolean(report.sitePaused || settings.globalOff || settings.restartOff || (settings.tempOffUntil && Date.now() < settings.tempOffUntil) || !settings.blockingEnabled);
+  }
+
+  // One neutral banner for pages PrivacyBrew cannot check, for offline, and for
+  // actions that failed. Each message says what happened and what to do.
+  const NOTICE = {
+    unsupported: 'PrivacyBrew does not check browser pages, like a new tab or settings. Open a website to see its report.',
+    offline: 'You are offline. PrivacyBrew still works. The report starts when a website loads.',
+    loadFailed: 'PrivacyBrew could not load the report. Close this window and open it again. If that does not help, restart the browser.',
+    scriptFailed: 'PrivacyBrew could not change this script. Reload the page and try again.'
+  };
+  let stateNotice = '';
+
+  function showNotice(message) {
+    text($('noticeText'), message || '');
+    $('noticeBanner').hidden = !message;
   }
 
   function statusText(report) {
@@ -199,6 +261,15 @@
     $('statusBar').hidden = !status || needsAccess;
     text($('statusText'), status);
 
+    const unsupported = report.status === 'unsupported';
+    const offline = navigator.onLine === false;
+    stateNotice = needsAccess ? '' : (offline ? NOTICE.offline : (unsupported ? NOTICE.unsupported : ''));
+    showNotice(stateNotice);
+    if (unsupported) {
+      text($('overall'), 'Nothing to check on this page');
+      setOverallClass('');
+    }
+
     const showWall = !status && !needsAccess && !needsReload && (report.adWall === 'detected' || report.adWall === 'hidden');
     if (showWall && report.adWall === 'detected') {
       $('wallBanner').hidden = false;
@@ -209,7 +280,7 @@
     } else {
       $('wallBanner').hidden = true;
     }
-    document.querySelector('.app').classList.toggle('compact-home', Boolean(status || showWall || needsAccess || needsReload));
+    document.querySelector('.app').classList.toggle('compact-home', Boolean(status || showWall || needsAccess || needsReload || stateNotice));
 
     const adCount = off ? 0 : (report.adBlockedRequestCount || 0);
     text($('homeTrackersNumber'), String(trackerCount));
@@ -241,7 +312,10 @@
     wrap.appendChild(flowDiagram('Tracker request', blocking, blocking
       ? 'The page sends a tracker request. PrivacyBrew blocks it.'
       : 'The page sends a tracker request. PrivacyBrew is off, so it does not block the request.'));
-    wrap.appendChild(make('p', report.blockedTrackerCount ? `PrivacyBrew blocked ${report.blockedTrackerCount} tracker ${plural(report.blockedTrackerCount, 'request')}.` : 'No known tracker companies found.', 'muted'));
+    const trackerSummary = report.blockedTrackerCount
+      ? `PrivacyBrew blocked ${report.blockedTrackerCount} tracker ${plural(report.blockedTrackerCount, 'request')}.`
+      : ((report.trackers || []).length ? 'PrivacyBrew did not block these trackers.' : 'No known trackers found on this page.');
+    wrap.appendChild(make('p', trackerSummary, 'muted'));
     for (const tracker of report.trackers || []) {
       const card = make('section', undefined, 'detail-card');
       const head = make('div');
@@ -281,8 +355,11 @@
   async function chooseScript(url, choice) {
     const scroller = $('detailContent');
     const top = scroller.scrollTop;
-    const response = await chrome.runtime.sendMessage({ type: 'setScriptChoice', tabId: currentTabId, url, choice });
-    if (!response || !response.ok) return;
+    const response = await chrome.runtime.sendMessage({ type: 'setScriptChoice', tabId: currentTabId, url, choice }).catch(() => null);
+    if (!response || !response.ok) {
+      showNotice(NOTICE.scriptFailed);
+      return;
+    }
     scriptsChanged = true;
     await refresh();
     renderDetail('scripts');
@@ -383,8 +460,7 @@
     }
   }
 
-  // Ads: the blocked ad requests, grouped by the website they go to, and the
-  // ad companies that PrivacyBrew found on this page.
+  // Ads. Blocked ad requests, grouped by website. Also the ad companies on this page.
   function adsDetail(report, blockingAds) {
     const wrap = make('div');
     wrap.appendChild(flowDiagram('Ad request', blockingAds, blockingAds
@@ -446,6 +522,37 @@
     return wrap;
   }
 
+  // Cookies: the pop-up result and the third-party cookie websites. Clearing
+  // cookies is the cookie button in the header (Clear cookies menu).
+  function cookiesDetail(report, popup) {
+    const wrap = make('div');
+    const site = report.siteDomain || 'this website';
+    const hosts = report.cookieDomains || [];
+    const owners = report.cookieOwners || {};
+    wrap.appendChild(make('p', `Cookie pop-up: ${popup.label}.`));
+    if (popup.cmp) wrap.appendChild(make('p', `Pop-up tool: ${popup.cmp}.`, 'muted'));
+
+    wrap.appendChild(make('h3', 'Third-party cookies on this page'));
+    if (hosts.length) {
+      wrap.appendChild(make('p', 'These websites saved cookies while you used this page. Trackers use cookies to know you again on other websites.', 'muted'));
+      const card = make('section', undefined, 'detail-card');
+      const list = make('ul', undefined, 'ad-list');
+      for (const host of hosts) {
+        const row = make('li');
+        row.appendChild(make('span', host, 'script-name'));
+        if (owners[host]) row.appendChild(make('span', owners[host], 'chip'));
+        list.appendChild(row);
+      }
+      card.appendChild(list);
+      wrap.appendChild(card);
+    } else {
+      wrap.appendChild(make('p', 'No third-party cookies found on this page.', 'muted'));
+    }
+
+    wrap.appendChild(make('p', 'To clear cookies, select the cookie button at the top.', 'muted'));
+    return wrap;
+  }
+
   function simpleDetail(children) {
     const wrap = make('div');
     for (const child of children) wrap.appendChild(child);
@@ -469,10 +576,7 @@
     } else if (kind === 'cookies') {
       title = 'Cookies';
       const popup = report.cookiePopup || { label: 'No pop-up found' };
-      node = simpleDetail([
-        make('p', `Cookie pop-up: ${popup.label}.`),
-        make('p', `${(report.cookieDomains || []).length} third-party cookie ${plural((report.cookieDomains || []).length, 'website')}.`, 'muted')
-      ]);
+      node = cookiesDetail(report, popup);
     } else {
       title = 'Fingerprinting';
       if ((report.fingerprints || []).length) {
@@ -502,7 +606,7 @@
       const item = make('li', site + ' ');
       const button = make('button', 'Remove');
       button.addEventListener('click', async () => {
-        await chrome.runtime.sendMessage({ type: 'setSitePaused', tabId: currentTabId, paused: false });
+        await chrome.runtime.sendMessage({ type: 'setSitePaused', site, paused: false });
         await refresh();
       });
       item.appendChild(button);
@@ -549,11 +653,26 @@
     $('feedbackButton').addEventListener('click', () => { renderFeedback(); showView('feedback'); });
     $('backButton').addEventListener('click', () => showView('home'));
     $('privacyRequestsRow').addEventListener('click', () => showView('settings'));
+    $('clearCookiesButton').addEventListener('click', toggleCookieMenu);
+    $('clearTrackerCookies').addEventListener('click', () => runClearCookies('thirdParty').catch(() => {}));
+    $('clearSiteCookies').addEventListener('click', () => {
+      text($('cookieConfirmText'), `Sign out of ${(currentReport && currentReport.siteDomain) || 'this website'} and clear its cookies?`);
+      $('cookieMenuResult').hidden = true;
+      $('cookieConfirm').hidden = false;
+    });
+    $('cookieConfirmYes').addEventListener('click', () => runClearCookies('site').catch(() => {}));
+    $('cookieConfirmNo').addEventListener('click', () => { $('cookieConfirm').hidden = true; });
+    // The cookie menu covers some cards, so a tap outside it closes it.
+    document.addEventListener('click', (event) => {
+      if ($('cookieMenu').hidden) return;
+      if ($('cookieMenu').contains(event.target) || $('clearCookiesButton').contains(event.target)) return;
+      closeCookieMenu();
+    });
     $('powerButton').addEventListener('click', togglePowerMenu);
     $('forAWhileButton').addEventListener('click', () => {
       setSubmenuOpen($('forAWhileSubmenu').hidden);
     });
-    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closePowerMenu(); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { closePowerMenu(); closeCookieMenu(); } });
 
     // Only one way to turn off can be active. Tapping the active option turns PrivacyBrew on again.
     const offOptions = () => [$('sitePowerButton'), ...document.querySelectorAll('#powerMenu [data-temp]'), $('globalOffButton')];
@@ -601,6 +720,7 @@
       // Call request first, while the click still counts as a user action.
       const granted = await chrome.permissions.request(ALL_SITES).catch(() => false);
       if (granted) await refresh();
+      else text($('accessText'), 'Access was not given. Without it, PrivacyBrew cannot see or block trackers. Select Allow access to try again.');
     });
     $('wallPause').addEventListener('click', async () => {
       await chrome.runtime.sendMessage({ type: 'setSitePaused', tabId: currentTabId, paused: true });
@@ -637,5 +757,8 @@
     bind();
     currentTabId = await activeTabId();
     await refresh();
-  })().catch(() => {});
+  })().catch(() => {
+    text($('overall'), 'No report');
+    showNotice(NOTICE.loadFailed);
+  });
 })();

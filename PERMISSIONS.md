@@ -18,6 +18,10 @@ PrivacyBrew stores per-tab reports in `chrome.storage.session`. It stores blocki
 
 PrivacyBrew blocks known tracker and ad requests with static rules. When you allow or block one outside script on a website, it adds one dynamic rule for that script on that website. "Block all" or "Allow all" adds one dynamic rule for all outside scripts on that website. It also sends the `Sec-GPC: 1` header when GPC is on and `DNT: 1` when DNT is on. PrivacyBrew counts blocked ads with `webRequest.onErrorOccurred` and a local EasyList index, so it does not need `declarativeNetRequestFeedback`.
 
+## `cookies`
+
+The Clear cookies button (the cookie icon at the top of the popup) clears cookies when the user asks: the cookies of the third-party websites found on the page, or the cookies of the website itself (after the user confirms, because this signs them out). PrivacyBrew lists cookies only to remove them. It does not store or send cookie names or values. It also finds partitioned cookies (Firefox Total Cookie Protection, Chrome CHIPS), so the clear is complete. This permission shows no install warning in Chrome or Firefox. `browsingData` was not used because Firefox shows a warning for it.
+
 ## `scripting`
 
 PrivacyBrew registers or removes small main-world content scripts for GPC and DNT. It also uses scripting for selected cookie pop-up rules that need page-world checks. These scripts run only in the sender tab and frame.

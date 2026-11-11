@@ -316,6 +316,23 @@ def run(s):
     pause(2.5)
     s.check('messaging + tabs.reload reloads the tab', s.page(page, 'window.__pbReloadMark') is None)
 
+    # Clear cookies: Firefox needs partitionKey {} and firstPartyDomain null to find
+    # partitioned cookies (Total Cookie Protection). Set one plain and one partitioned
+    # cookie for the third-party host, and one for the site, then clear.
+    tp = f'http://cdn.some-unknown-thirdparty.example:{PORT}/'
+    site = f'http://site.test:{PORT}/'
+    s.bg(f"Promise.all([b.chrome.cookies.set({{url: '{tp}', name: 'pbtrack', value: '1'}}), b.chrome.cookies.set({{url: '{tp}', name: 'pbpart', value: '1', partitionKey: {{topLevelSite: 'http://site.test'}}}}), b.chrome.cookies.set({{url: '{site}', name: 'pbsite', value: '1'}})]).then(() => true)")
+    def ff_cookie_names(domain):
+        return s.bg(f"b.chrome.cookies.getAll({{domain: '{domain}', partitionKey: {{}}, firstPartyDomain: null}}).then((cs) => cs.map((c) => c.name))") or []
+    s.check('test cookies set (plain and partitioned)', {'pbtrack', 'pbpart'} <= set(ff_cookie_names('some-unknown-thirdparty.example')) and 'pbsite' in ff_cookie_names('site.test'), (ff_cookie_names('some-unknown-thirdparty.example'), ff_cookie_names('site.test')))
+    s.check('cookie report lists the third-party host', 'cdn.some-unknown-thirdparty.example' in (s.summary(tab_id).get('cookieDomains') or []), s.summary(tab_id).get('cookieDomains'))
+    res = s.bg(f"browser.runtime.sendMessage({{type: 'clearCookies', tabId: {tab_id}, scope: 'thirdParty'}})") or {}
+    left = ff_cookie_names('some-unknown-thirdparty.example')
+    s.check('clear third-party cookies removes plain and partitioned cookies', res.get('ok') and res.get('removed', 0) >= 2 and not ({'pbtrack', 'pbpart'} & set(left)), (res, left))
+    s.check('clear third-party cookies keeps site cookies', 'pbsite' in ff_cookie_names('site.test'))
+    res = s.bg(f"browser.runtime.sendMessage({{type: 'clearCookies', tabId: {tab_id}, scope: 'site'}})") or {}
+    s.check('clear site cookies removes them', res.get('ok') and 'pbsite' not in ff_cookie_names('site.test'), res)
+
     # Popup on the tracker page: numbers, feedback link, layout of all views.
     pop = s.popup_for(page)
     s.ff.wait(pop, "document.querySelector('#homeTrackersNumber').textContent !== '0'", 10)
@@ -461,7 +478,7 @@ def run(s):
     s.check('host access can be removed', s.bg("b.chrome.permissions.contains({origins: ['*://*/*']})") is False)
     pop = s.popup_for(page)
     s.check('access notice shown without host access', s.ff.eval(pop, "document.querySelector('#accessBanner').hidden") is False)
-    s.check('access notice text', s.text(pop, '#accessText') == 'PrivacyBrew needs access to websites to protect you.')
+    s.check('access notice text', s.text(pop, '#accessText') == 'PrivacyBrew needs access to websites to see and block trackers. Nothing leaves your browser.')
     s.layout(pop, 'no-access')
     granted = click_allow_and_accept(s, pop)
     s.check('Allow access button asks Firefox and gets access', granted is True)

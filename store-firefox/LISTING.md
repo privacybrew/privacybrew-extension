@@ -28,6 +28,8 @@ You decide which outside scripts run. On each website, you can block or allow on
 
 PrivacyBrew blocks known trackers and ads from the start. It answers cookie pop-ups with "Reject all" or with only necessary cookies, and it never selects "Accept all". Where it can, it hides messages that ask you to turn off your ad blocker. It asks each website not to sell or share your data (Global Privacy Control). Do Not Track is optional.
 
+You can clear cookies from the popup: the cookies of the third-party websites on a page, or the cookies of the website itself. Clearing a website's cookies signs you out, so PrivacyBrew asks first.
+
 The power button turns PrivacyBrew off for one website, for a while, or until you turn it on again.
 
 PrivacyBrew has no account, no analytics and no ads. The code is open source (GPLv3): https://github.com/privacybrew/privacybrew-extension

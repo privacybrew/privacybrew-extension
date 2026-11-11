@@ -10,6 +10,9 @@ ART = ROOT / 'artifacts'
 PORT = 8796  # not 8765: that port is used by the website preview server
 HOSTS = ['site.test', 'clean.test', 'youtube.com', 'www.google-analytics.com', 'static.doubleclick.net', 'connect.facebook.net', 'bat.bing.com', '5min.com', 'cdn.some-unknown-thirdparty.example', 'googleads.g.doubleclick.net']
 HEADER_LOG = []
+# Chrome also runs its own extensions with a background.js (for example the
+# Gemini helper), so the tests look for the worker of the extension they loaded.
+OUR_ID = None
 HEADLESS = '--headed' not in sys.argv
 SLOW = '--slow' in sys.argv
 if not HEADLESS and not (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
@@ -211,7 +214,8 @@ def connect_fallback():
     ], 'fallback')
     ws_url = wait_port_from_stderr(proc)
     cdp = CDP(ws_url)
-    cdp.call('Extensions.loadUnpacked', {'path': str(EXT)})
+    global OUR_ID
+    OUR_ID = cdp.call('Extensions.loadUnpacked', {'path': str(EXT)}).get('id')
     return proc, cdp
 
 def attach_target(cdp, target_id):
@@ -237,12 +241,15 @@ def service_worker_errors(cdp, sessions):
             out.append('console: ' + text)
     return out
 
+def is_ours(target):
+    return not OUR_ID or target.get('url', '').startswith(f'chrome-extension://{OUR_ID}/')
+
 def wait_new_extension(cdp, old_target_id, timeout=10):
     deadline = time.time() + timeout
     while time.time() < deadline:
         targets = cdp.call('Target.getTargets')['targetInfos']
         for t in targets:
-            if t.get('targetId') != old_target_id and t.get('type') == 'service_worker' and t.get('url', '').startswith('chrome-extension://') and t.get('url', '').endswith('/background.js'):
+            if t.get('targetId') != old_target_id and t.get('type') == 'service_worker' and t.get('url', '').startswith('chrome-extension://') and t.get('url', '').endswith('/background.js') and is_ours(t):
                 ext_id = t['url'].split('/')[2]
                 return ext_id, t['targetId']
         time.sleep(0.25)
@@ -273,7 +280,7 @@ def find_extension(cdp):
     while time.time() < deadline:
         targets = cdp.call('Target.getTargets')['targetInfos']
         for t in targets:
-            if t.get('type') == 'service_worker' and t.get('url', '').startswith('chrome-extension://') and t.get('url', '').endswith('/background.js'):
+            if t.get('type') == 'service_worker' and t.get('url', '').startswith('chrome-extension://') and t.get('url', '').endswith('/background.js') and is_ours(t):
                 ext_id = t['url'].split('/')[2]
                 return ext_id, t['targetId']
         time.sleep(0.25)
@@ -599,6 +606,72 @@ def run_e2e(cdp):
       return t;
     })()""") or ''
     checks.append(('ads detail shows blocked requests and ad companies', 'Blocked ad requests' in ads_text and 'Ad companies on this page' in ads_text and 'googleads.g.doubleclick.net' in ads_text))
+    # Threat model T5: a page cannot grow the per-page lists without limit.
+    caps = eval_value(cdp, sw_session, """(() => {
+      const s = PB.Report.emptyState(1, 'https://cap.test/', 'cap.test');
+      PB.Report.addFingerprint(s, 'canvas', 'x'.repeat(5000));
+      for (let i = 0; i < 500; i++) {
+        PB.Report.addFingerprint(s, 'canvas', 'https://fake' + i + '.test/x.js');
+        PB.Report.addCookie(s, 'c' + i + '.test');
+        PB.Report.addUnknown(s, 'u' + i + '.test');
+      }
+      return {fp: Object.keys(s.fingerprints.canvas).length, cookies: Object.keys(s.cookieDomains).length, unknown: Object.keys(s.unknownDomains).length,
+              longest: Math.max(...Object.keys(s.fingerprints.canvas).map(k => k.length))};
+    })()""") or {}
+    checks.append(('fingerprint sources capped at 50 per method', caps.get('fp') == 50))
+    checks.append(('cookie and unknown domain lists capped at 200', caps.get('cookies') == 200 and caps.get('unknown') == 200))
+    checks.append(('fingerprint source text capped at 200 characters', caps.get('longest', 0) <= 200))
+    # Cookies card: third-party cookie list, and the two clear actions.
+    tp_url = f'http://cdn.some-unknown-thirdparty.example:{PORT}/'
+    site_url = f'http://site.test:{PORT}/'
+    eval_value(cdp, sw_session, "Promise.all([chrome.cookies.set({url:%s, name:'pbtrack', value:'1'}), chrome.cookies.set({url:%s, name:'pbsite', value:'1'})]).then(() => true)" % (json.dumps(tp_url), json.dumps(site_url)))
+    def cookie_names(url):
+        return eval_value(cdp, sw_session, "chrome.cookies.getAll({url:%s}).then(cs => cs.map(c => c.name))" % json.dumps(url)) or []
+    checks.append(('test cookies set', 'pbtrack' in cookie_names(tp_url) and 'pbsite' in cookie_names(site_url)))
+    ui = eval_value(cdp, popup_session, """(async () => {
+      const wait = (ms) => new Promise(r => setTimeout(r, ms));
+      document.querySelector('[data-detail="cookies"]').click();
+      await wait(300);
+      const detail = document.querySelector('#detailContent').textContent;
+      document.querySelector('#backButton').click();
+      await wait(200);
+      document.querySelector('#clearCookiesButton').click();
+      await wait(150);
+      const menu = document.querySelector('#cookieMenu');
+      const menuOpen = !menu.hidden;
+      const menuText = menu.textContent;
+      document.querySelector('#clearSiteCookies').click();
+      await wait(100);
+      const confirmText = document.querySelector('#cookieConfirm').hidden ? '' : document.querySelector('#cookieConfirm').textContent;
+      document.querySelector('#cookieConfirmNo').click();
+      await wait(100);
+      const confirmClosed = document.querySelector('#cookieConfirm').hidden;
+      document.querySelector('#clearTrackerCookies').click();
+      await wait(800);
+      const result = document.querySelector('#cookieMenuResult').hidden ? '' : document.querySelector('#cookieMenuResult').textContent;
+      document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}));
+      await wait(100);
+      const closedByEscape = menu.hidden;
+      document.querySelector('#clearCookiesButton').click();
+      await wait(100);
+      document.querySelector('#siteName').click();
+      await wait(100);
+      const inHeader = Boolean(document.querySelector('.topbar #clearCookiesButton[aria-label="Clear cookies"]'));
+      return {detail, menuOpen, menuText, confirmText, confirmClosed, result, closedByEscape, closedByOutsideTap: menu.hidden, inHeader};
+    })()""") or {}
+    checks.append(('cookies detail lists third-party cookie websites', 'Third-party cookies on this page' in ui.get('detail', '') and 'cdn.some-unknown-thirdparty.example' in ui.get('detail', '')))
+    checks.append(('cookies detail has no clear buttons', 'Clear cookies from these websites' not in ui.get('detail', '') and 'select the cookie button at the top' in ui.get('detail', '')))
+    checks.append(('Clear cookies is a labelled button in the header', ui.get('inHeader') is True))
+    checks.append(('header Clear cookies opens the menu with both choices', ui.get('menuOpen') is True and 'Clear third-party cookies' in ui.get('menuText', '') and 'Clear cookies of site.test' in ui.get('menuText', '')))
+    checks.append(('clearing site cookies asks first', 'Sign out of site.test and clear its cookies?' in ui.get('confirmText', '') and ui.get('confirmClosed') is True))
+    checks.append(('site cookie kept after cancel', 'pbsite' in cookie_names(site_url)))
+    checks.append(('menu clear third-party cookies removes them', ui.get('result', '').startswith('Removed') and 'pbtrack' not in cookie_names(tp_url)))
+    checks.append(('clear third-party cookies keeps site cookies', 'pbsite' in cookie_names(site_url)))
+    checks.append(('Escape closes the cookie menu', ui.get('closedByEscape') is True))
+    checks.append(('a tap outside closes the cookie menu', ui.get('closedByOutsideTap') is True))
+    cleared = eval_value(cdp, popup_session, "chrome.runtime.sendMessage({type:'clearCookies', tabId:%d, scope:'site'})" % tab_id) or {}
+    checks.append(('clear site cookies removes them', cleared.get('ok') and 'pbsite' not in cookie_names(site_url)))
+    checks.append(('clear cookies refuses an unknown scope', (eval_value(cdp, popup_session, "chrome.runtime.sendMessage({type:'clearCookies', tabId:%d, scope:'all'})" % tab_id) or {}).get('ok') is not True))
     report_items = {item['url']: item for item in summarize_state(cdp, sw_session, tab_id).get('outsideScriptItems', [])}
     checks.append(('script item has tracker company', report_items.get(ga_url, {}).get('company') == 'Google'))
     checks.append(('script choice refused for script not on page', choose_script('http://not-on-page.example/x.js', 'allow') is False))
@@ -670,7 +743,34 @@ def run_e2e(cdp):
     paused_shot = cdp.call('Page.captureScreenshot', {'format': 'png', 'captureBeyondViewport': True}, paused_popup_session)['data']
     paused_shot_path = ART / 'pb-ext-popup-paused.png'
     paused_shot_path.write_bytes(base64.b64decode(paused_shot))
+    # Settings > Remove turns on the website in that row, not the website of the open tab.
+    cdp.call('Runtime.evaluate', {'expression': "setPaused('other.test', true)", 'awaitPromise': True}, sw_session)
+    cdp.call('Page.navigate', {'url': f'chrome-extension://{ext_id}/popup.html?tabId={tab_id}'}, paused_popup_session)
+    wait_expr(cdp, paused_popup_session, 'document.readyState === "complete"', 10)
+    wait_expr(cdp, paused_popup_session, "[...document.querySelectorAll('#pausedList li')].some((li) => li.textContent.startsWith('other.test'))", 10)
+    removed = eval_value(cdp, paused_popup_session, """(async () => {
+      document.querySelector('#settingsButton').click();
+      await new Promise((r) => setTimeout(r, 400));
+      const row = [...document.querySelectorAll('#pausedList li')].find((li) => li.textContent.startsWith('other.test'));
+      if (!row) return { found: false };
+      row.querySelector('button').click();
+      await new Promise((r) => setTimeout(r, 600));
+      const { pausedSites } = await chrome.storage.local.get('pausedSites');
+      return { found: true, sites: Object.keys(pausedSites || {}) };
+    })()""") or {}
+    checks.append(('paused list Remove turns on the listed website', removed.get('found') is True and 'other.test' not in removed.get('sites', ['other.test'])))
+    checks.append(('paused list Remove keeps the open website paused', 'site.test' in removed.get('sites', [])))
+    refused = eval_value(cdp, paused_popup_session, "chrome.runtime.sendMessage({type:'setSitePaused', site:'not-listed.test', paused:false}).catch(() => null)")
+    checks.append(('turn on by name refused for a website not on the list', not (refused or {}).get('ok')))
     cdp.call('Runtime.evaluate', {'expression': "setPaused('site.test', false)", 'awaitPromise': True}, sw_session)
+    # A page PrivacyBrew cannot check gets an explanation, not an empty report.
+    blank_popup = cdp.call('Target.createTarget', {'url': f'chrome-extension://{ext_id}/popup.html?tabId=987654'})['targetId']
+    blank_popup_session = attach_target(cdp, blank_popup)
+    wait_expr(cdp, blank_popup_session, 'document.readyState === "complete"', 10)
+    wait_expr(cdp, blank_popup_session, "!document.querySelector('#noticeBanner').hidden", 10)
+    checks.append(('unsupported page explains what to do', popup_text(cdp, blank_popup_session, '#noticeText').startswith('PrivacyBrew does not check browser pages')))
+    checks.append(('unsupported page header text', popup_text(cdp, blank_popup_session, '#overall') == 'Nothing to check on this page'))
+    cdp.call('Target.closeTarget', {'targetId': blank_popup})
     cdp.call('Runtime.evaluate', {'expression': "setGlobalBlocking(false)", 'awaitPromise': True}, sw_session)
     navigate_and_wait(cdp, session, f'http://site.test:{PORT}/tracker.html')
     global_off_vars = eval_value(cdp, session, '({ga: window.__pbGaRan, ad: window.__pbDoubleClickRan, meta: window.__pbMetaRan, bing: window.__pbBingRan})')
