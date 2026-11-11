@@ -78,3 +78,7 @@ No account or login is needed.
   ZIP SHA-256: aee5625b0d770176aa565c3892c1c3881852be751715c50dcbf6835cb64eb243
 - 2026-11-03: Version 1.0.4 prepared. Script and ad details, Block all / Allow all and per-script
   Block / Allow, bundled fonts, flat panels. ZIP SHA-256: fa94991ed2143dbb0b7d09b72488e17e52e5548f7bbb92a56ddf2bead51b9449
+- 2026-11-11: Version 1.0.5 prepared. Royal amethyst colours, Clear cookies button in the header
+  (new `cookies` permission, no install warning; privacy tab needs the cookies justification from
+  PRIVACY_PRACTICES.md), clearer notices. Source commit 4727e77.
+  ZIP SHA-256: b25b14057801d1be1dbfda166d08cc07037a5acb192c534913a60b05c29790ae

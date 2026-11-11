@@ -3,8 +3,8 @@
 PrivacyBrew is open source (GPLv3).
 
 - Repository: https://github.com/privacybrew/privacybrew-extension
-- Commit: af156d4215932bf3078f23b1674491184ecaaacc
-- Uploaded file: `privacybrew-extension-firefox-1.0.4.zip`
+- Commit: 4727e777d4b380ec0c28049cb7e679a45b2e07df
+- Uploaded file: `privacybrew-extension-firefox-1.0.5.zip`
 
 ## What is in the ZIP
 
@@ -23,14 +23,14 @@ You need only Python 3.10 or newer. The build uses the Python standard library. 
 ```sh
 git clone https://github.com/privacybrew/privacybrew-extension.git
 cd privacybrew-extension
-git checkout af156d4215932bf3078f23b1674491184ecaaacc
+git checkout 4727e777d4b380ec0c28049cb7e679a45b2e07df
 python3 tools/package.py --target firefox
 ```
 
-The output is `dist/privacybrew-extension-firefox-1.0.4.zip`. The work folder is `dist/package-work-firefox/`. ZIP timestamps differ from build to build, so compare the files, not the ZIP hash:
+The output is `dist/privacybrew-extension-firefox-1.0.5.zip`. The work folder is `dist/package-work-firefox/`. ZIP timestamps differ from build to build, so compare the files, not the ZIP hash:
 
 ```sh
-mkdir uploaded && cd uploaded && unzip -q ../privacybrew-extension-firefox-1.0.4.zip && cd ..
+mkdir uploaded && cd uploaded && unzip -q ../privacybrew-extension-firefox-1.0.5.zip && cd ..
 diff -r uploaded dist/package-work-firefox
 ```
 
